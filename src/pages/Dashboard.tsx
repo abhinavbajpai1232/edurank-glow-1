@@ -10,6 +10,8 @@ import {
   LogOut,
   Sparkles,
   TrendingUp,
+  Loader2,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -17,102 +19,149 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import Logo from '@/components/Logo';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Todo {
   id: string;
   title: string;
   completed: boolean;
-  videoId?: string;
-  quizUnlocked?: boolean;
+  video_id: string | null;
+  video_url: string | null;
 }
 
-interface VideoRec {
-  id: string;
-  title: string;
-  thumbnail: string;
-  duration: string;
-  todoId: string;
-}
-
-// Mock data
-const mockVideoRecs: VideoRec[] = [
-  {
-    id: 'dQw4w9WgXcQ',
-    title: 'Introduction to Machine Learning',
-    thumbnail: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-    duration: '12:45',
-    todoId: '1',
-  },
-  {
-    id: 'jNQXAC9IVRw',
-    title: 'Data Structures Explained',
-    thumbnail: 'https://img.youtube.com/vi/jNQXAC9IVRw/mqdefault.jpg',
-    duration: '18:30',
-    todoId: '2',
-  },
-  {
-    id: '9bZkp7q19f0',
-    title: 'Web Development Fundamentals',
-    thumbnail: 'https://img.youtube.com/vi/9bZkp7q19f0/mqdefault.jpg',
-    duration: '22:15',
-    todoId: '3',
-  },
-];
+const extractYouTubeId = (url: string): string | null => {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /^([a-zA-Z0-9_-]{11})$/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, profile, logout } = useAuth();
-  const [todos, setTodos] = useState<Todo[]>([
-    { id: '1', title: 'Learn Machine Learning basics', completed: false, videoId: 'dQw4w9WgXcQ' },
-    { id: '2', title: 'Study Data Structures', completed: true, videoId: 'jNQXAC9IVRw', quizUnlocked: true },
-  ]);
-  const [newTodo, setNewTodo] = useState('');
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [newTodoTitle, setNewTodoTitle] = useState('');
+  const [newVideoUrl, setNewVideoUrl] = useState('');
   const [showInput, setShowInput] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
 
   const completedCount = todos.filter((t) => t.completed).length;
   const progress = todos.length > 0 ? (completedCount / todos.length) * 100 : 0;
 
-  // Get display name from profile or user metadata
   const displayName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Student';
+
+  useEffect(() => {
+    if (user) {
+      fetchTodos();
+    }
+  }, [user]);
+
+  const fetchTodos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('todos')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTodos(data || []);
+    } catch (error) {
+      console.error('Error fetching todos:', error);
+      toast.error('Failed to load tasks');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddTodo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTodo.trim()) return;
+    if (!newTodoTitle.trim() || !user) return;
 
-    const newTodoItem: Todo = {
-      id: Date.now().toString(),
-      title: newTodo,
-      completed: false,
-      videoId: mockVideoRecs[Math.floor(Math.random() * mockVideoRecs.length)].id,
-    };
+    const videoId = newVideoUrl ? extractYouTubeId(newVideoUrl) : null;
+    
+    if (newVideoUrl && !videoId) {
+      toast.error('Invalid YouTube URL. Please enter a valid YouTube link.');
+      return;
+    }
 
-    setTodos([...todos, newTodoItem]);
-    setNewTodo('');
-    setShowInput(false);
-    toast.success('Task added! AI is finding relevant videos...');
+    setAdding(true);
+    try {
+      const { data, error } = await supabase
+        .from('todos')
+        .insert({
+          title: newTodoTitle.trim(),
+          video_url: newVideoUrl || null,
+          video_id: videoId,
+          user_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setTodos([data, ...todos]);
+      setNewTodoTitle('');
+      setNewVideoUrl('');
+      setShowInput(false);
+      toast.success('Task added!');
+    } catch (error) {
+      console.error('Error adding todo:', error);
+      toast.error('Failed to add task');
+    } finally {
+      setAdding(false);
+    }
   };
 
-  const toggleTodo = (id: string) => {
-    setTodos(
-      todos.map((todo) => {
-        if (todo.id === id) {
-          const completed = !todo.completed;
-          if (completed) {
-            toast.success('Great job! Quiz unlocked!', {
-              icon: <Trophy className="h-4 w-4 text-primary" />,
-            });
+  const toggleTodo = async (id: string) => {
+    const todo = todos.find((t) => t.id === id);
+    if (!todo) return;
+
+    try {
+      const { error } = await supabase
+        .from('todos')
+        .update({ completed: !todo.completed })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setTodos(
+        todos.map((t) => {
+          if (t.id === id) {
+            const completed = !t.completed;
+            if (completed) {
+              toast.success('Great job! Quiz unlocked!', {
+                icon: <Trophy className="h-4 w-4 text-primary" />,
+              });
+            }
+            return { ...t, completed };
           }
-          return { ...todo, completed, quizUnlocked: completed };
-        }
-        return todo;
-      })
-    );
+          return t;
+        })
+      );
+    } catch (error) {
+      console.error('Error updating todo:', error);
+      toast.error('Failed to update task');
+    }
   };
 
   const handleLogout = async () => {
     await logout();
     navigate('/auth');
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-24">
@@ -161,6 +210,13 @@ const Dashboard = () => {
           </div>
 
           <div className="space-y-3">
+            {todos.length === 0 && !showInput && (
+              <div className="glass-card rounded-xl p-8 text-center">
+                <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No study tasks yet. Add your first task!</p>
+              </div>
+            )}
+
             {todos.map((todo) => (
               <div
                 key={todo.id}
@@ -179,15 +235,23 @@ const Dashboard = () => {
                       <Circle className="h-6 w-6 text-muted-foreground hover:text-primary" />
                     )}
                   </button>
-                  <span
-                    className={`flex-1 ${
-                      todo.completed ? 'line-through text-muted-foreground' : ''
-                    }`}
-                  >
-                    {todo.title}
-                  </span>
-                  <div className="flex gap-2">
-                    {todo.videoId && (
+                  <div className="flex-1 min-w-0">
+                    <span
+                      className={`block ${
+                        todo.completed ? 'line-through text-muted-foreground' : ''
+                      }`}
+                    >
+                      {todo.title}
+                    </span>
+                    {todo.video_id && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <LinkIcon className="h-3 w-3" />
+                        YouTube video attached
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {todo.video_id && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -197,7 +261,7 @@ const Dashboard = () => {
                         Watch
                       </Button>
                     )}
-                    {todo.quizUnlocked && (
+                    {todo.completed && (
                       <Button
                         variant="success"
                         size="sm"
@@ -213,72 +277,43 @@ const Dashboard = () => {
             ))}
 
             {showInput && (
-              <form onSubmit={handleAddTodo} className="flex gap-2">
+              <form onSubmit={handleAddTodo} className="glass-card rounded-xl p-4 space-y-3">
                 <Input
                   placeholder="What do you want to learn?"
-                  value={newTodo}
-                  onChange={(e) => setNewTodo(e.target.value)}
+                  value={newTodoTitle}
+                  onChange={(e) => setNewTodoTitle(e.target.value)}
                   autoFocus
                 />
-                <Button type="submit" variant="neon">
-                  Add
-                </Button>
+                <Input
+                  placeholder="YouTube video URL (optional)"
+                  value={newVideoUrl}
+                  onChange={(e) => setNewVideoUrl(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button type="submit" variant="neon" disabled={adding || !newTodoTitle.trim()}>
+                    {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Task'}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setShowInput(false)}>
+                    Cancel
+                  </Button>
+                </div>
               </form>
             )}
-          </div>
-        </section>
-
-        {/* Video Recommendations */}
-        <section className="space-y-4 animate-slide-up">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-primary" />
-            Recommended Videos
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {mockVideoRecs.map((video) => (
-              <div
-                key={video.id}
-                className="glass-card rounded-xl overflow-hidden group cursor-pointer hover:neon-glow transition-all duration-300"
-                onClick={() => navigate(`/video/${video.todoId}`)}
-              >
-                <div className="relative aspect-video bg-muted">
-                  <img
-                    src={video.thumbnail}
-                    alt={video.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = 'https://placehold.co/320x180/1a1a2e/22d3ee?text=Video';
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-                  <div className="absolute bottom-2 right-2 px-2 py-1 rounded bg-background/80 text-xs font-mono">
-                    {video.duration}
-                  </div>
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="p-4 rounded-full bg-primary/90 neon-glow">
-                      <Play className="h-6 w-6 text-primary-foreground" />
-                    </div>
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-medium line-clamp-2">{video.title}</h3>
-                </div>
-              </div>
-            ))}
           </div>
         </section>
       </main>
 
       {/* FAB */}
-      <Button
-        variant="neon"
-        size="fab"
-        className="fixed bottom-6 right-6 animate-pulse-glow"
-        onClick={() => setShowInput(!showInput)}
-      >
-        <Plus className="h-6 w-6" />
-      </Button>
+      {!showInput && (
+        <Button
+          variant="neon"
+          size="fab"
+          className="fixed bottom-6 right-6 animate-pulse-glow"
+          onClick={() => setShowInput(true)}
+        >
+          <Plus className="h-6 w-6" />
+        </Button>
+      )}
     </div>
   );
 };
