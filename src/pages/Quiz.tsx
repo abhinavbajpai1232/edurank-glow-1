@@ -10,23 +10,30 @@ import {
   RotateCcw,
   Loader2,
   AlertCircle,
+  Lightbulb,
+  Brain,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Question {
   id: number;
+  type?: string;
+  difficulty?: string;
   question: string;
   options: string[];
   correctAnswer: number;
+  explanation?: string;
 }
 
 const Quiz = () => {
-  const { quizId } = useParams(); // This is actually todoId
+  const { quizId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -38,6 +45,10 @@ const Quiz = () => {
   const [showResult, setShowResult] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [noNotes, setNoNotes] = useState(false);
+  const [notes, setNotes] = useState<string>('');
+  const [adaptiveMode, setAdaptiveMode] = useState(false);
+  const [currentDifficulty, setCurrentDifficulty] = useState<string>('medium');
+  const [generatingAdaptive, setGeneratingAdaptive] = useState(false);
 
   useEffect(() => {
     if (quizId && user) {
@@ -47,7 +58,6 @@ const Quiz = () => {
 
   const fetchOrGenerateQuiz = async () => {
     try {
-      // First check if quiz already exists
       const { data: existingQuiz } = await supabase
         .from('quizzes')
         .select('questions')
@@ -61,7 +71,6 @@ const Quiz = () => {
         return;
       }
 
-      // Check if notes exist
       const { data: notesData } = await supabase
         .from('notes')
         .select('content')
@@ -75,7 +84,7 @@ const Quiz = () => {
         return;
       }
 
-      // Generate quiz from notes
+      setNotes(notesData.content);
       setGenerating(true);
       const { data, error } = await supabase.functions.invoke('generate-quiz', {
         body: {
@@ -126,14 +135,56 @@ const Quiz = () => {
     const newAnswers = [...answers, selectedAnswer];
     setAnswers(newAnswers);
 
-    if (selectedAnswer === question.correctAnswer) {
+    const isCorrect = selectedAnswer === question.correctAnswer;
+    if (isCorrect) {
       toast.success('Correct!');
     } else {
       toast.error('Not quite right');
     }
   };
 
-  const handleNextQuestion = () => {
+  const generateAdaptiveQuestion = async (wasCorrect: boolean) => {
+    if (!notes || !question) return null;
+
+    setGeneratingAdaptive(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('adaptive-question', {
+        body: {
+          notes,
+          previousQuestion: question.question,
+          wasCorrect,
+          difficulty: currentDifficulty,
+        },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      setCurrentDifficulty(data.difficulty);
+      return data.question as Question;
+    } catch (error) {
+      console.error('Error generating adaptive question:', error);
+      return null;
+    } finally {
+      setGeneratingAdaptive(false);
+    }
+  };
+
+  const handleNextQuestion = async () => {
+    const wasCorrect = selectedAnswer === question.correctAnswer;
+
+    if (adaptiveMode && notes) {
+      const adaptiveQuestion = await generateAdaptiveQuestion(wasCorrect);
+      if (adaptiveQuestion) {
+        adaptiveQuestion.id = questions.length + 1;
+        setQuestions([...questions, adaptiveQuestion]);
+        setCurrentQuestion(currentQuestion + 1);
+        setSelectedAnswer(null);
+        setIsSubmitted(false);
+        return;
+      }
+    }
+
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
       setSelectedAnswer(null);
@@ -180,6 +231,39 @@ const Quiz = () => {
     setAnswers([]);
     setShowResult(false);
     setIsSubmitted(false);
+    setAdaptiveMode(false);
+    setCurrentDifficulty('medium');
+  };
+
+  const getDifficultyColor = (diff?: string) => {
+    switch (diff) {
+      case 'easy': return 'bg-success/20 text-success border-success/30';
+      case 'hard': return 'bg-destructive/20 text-destructive border-destructive/30';
+      default: return 'bg-primary/20 text-primary border-primary/30';
+    }
+  };
+
+  const getTypeIcon = (type?: string) => {
+    switch (type) {
+      case 'concept_check': return <Lightbulb className="h-4 w-4" />;
+      case 'mechanism_check': return <Brain className="h-4 w-4" />;
+      case 'application_check': return <Zap className="h-4 w-4" />;
+      case 'misconception_trap': return <AlertCircle className="h-4 w-4" />;
+      case 'why_question': return <Sparkles className="h-4 w-4" />;
+      default: return <Sparkles className="h-4 w-4" />;
+    }
+  };
+
+  const getTypeLabel = (type?: string) => {
+    switch (type) {
+      case 'concept_check': return 'Concept Check';
+      case 'mechanism_check': return 'How It Works';
+      case 'application_check': return 'Real-World Application';
+      case 'misconception_trap': return 'Common Misconception';
+      case 'why_question': return 'Understanding Why';
+      case 'adaptive': return 'Adaptive Question';
+      default: return 'Question';
+    }
   };
 
   if (loading || generating) {
@@ -187,7 +271,7 @@ const Quiz = () => {
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 className="h-8 w-8 text-primary animate-spin" />
         <p className="text-muted-foreground">
-          {generating ? 'Generating quiz questions...' : 'Loading quiz...'}
+          {generating ? 'Generating conceptual quiz questions...' : 'Loading quiz...'}
         </p>
       </div>
     );
@@ -242,8 +326,8 @@ const Quiz = () => {
             </h1>
             <p className="text-muted-foreground mb-6">
               {isPassing
-                ? "You've mastered this topic!"
-                : "Don't worry, practice makes perfect!"}
+                ? "You've demonstrated strong conceptual understanding!"
+                : "Review the explanations to strengthen your understanding."}
             </p>
 
             <div className="text-5xl font-bold neon-text mb-2">
@@ -251,26 +335,25 @@ const Quiz = () => {
             </div>
             <p className="text-muted-foreground mb-8">{Math.round(percentage)}% correct</p>
 
-            {/* Feedback cards */}
             <div className="space-y-3 mb-8 text-left">
               {isPassing ? (
                 <div className="p-4 rounded-lg bg-success/10 border border-success/30">
                   <div className="flex items-center gap-2 text-success mb-1">
                     <CheckCircle className="h-4 w-4" />
-                    <span className="font-medium">Great performance!</span>
+                    <span className="font-medium">Great conceptual understanding!</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    You have a solid understanding of the material. Keep up the great work!
+                    You've shown deep comprehension of the material. Keep exploring!
                   </p>
                 </div>
               ) : (
                 <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
                   <div className="flex items-center gap-2 text-destructive mb-1">
                     <Sparkles className="h-4 w-4" />
-                    <span className="font-medium">Areas to improve</span>
+                    <span className="font-medium">Areas to strengthen</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Review the video and notes again, then try the quiz once more!
+                    Review the explanations for questions you missed, then try again!
                   </p>
                 </div>
               )}
@@ -294,7 +377,6 @@ const Quiz = () => {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
       <header className="sticky top-0 z-50 glass-card border-b border-border/50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
@@ -304,9 +386,21 @@ const Quiz = () => {
               </Button>
               <Logo size="sm" />
             </div>
-            <span className="text-sm text-muted-foreground">
-              Question {currentQuestion + 1} of {questions.length}
-            </span>
+            <div className="flex items-center gap-3">
+              {notes && (
+                <Button
+                  variant={adaptiveMode ? "neon" : "outline"}
+                  size="sm"
+                  onClick={() => setAdaptiveMode(!adaptiveMode)}
+                >
+                  <Brain className="h-4 w-4 mr-1" />
+                  Adaptive
+                </Button>
+              )}
+              <span className="text-sm text-muted-foreground">
+                Question {currentQuestion + 1} of {questions.length}
+              </span>
+            </div>
           </div>
           <Progress value={progress} className="h-2" />
         </div>
@@ -314,17 +408,22 @@ const Quiz = () => {
 
       <main className="container mx-auto px-4 py-8 max-w-2xl">
         <div className="animate-fade-in">
-          {/* Question */}
           <div className="glass-card rounded-2xl p-6 mb-6">
-            <div className="flex items-center gap-2 text-primary mb-4">
-              <Sparkles className="h-5 w-5" />
-              <span className="text-sm font-medium">Question {currentQuestion + 1}</span>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 text-primary">
+                {getTypeIcon(question.type)}
+                <span className="text-sm font-medium">{getTypeLabel(question.type)}</span>
+              </div>
+              {question.difficulty && (
+                <Badge variant="outline" className={getDifficultyColor(question.difficulty)}>
+                  {question.difficulty.charAt(0).toUpperCase() + question.difficulty.slice(1)}
+                </Badge>
+              )}
             </div>
             <h2 className="text-xl font-semibold">{question.question}</h2>
           </div>
 
-          {/* Options */}
-          <div className="space-y-3 mb-8">
+          <div className="space-y-3 mb-6">
             {question.options.map((option, index) => {
               const isSelected = selectedAnswer === index;
               const isCorrect = index === question.correctAnswer;
@@ -373,7 +472,18 @@ const Quiz = () => {
             })}
           </div>
 
-          {/* Actions */}
+          {isSubmitted && question.explanation && (
+            <div className="glass-card rounded-xl p-4 mb-6 border border-primary/30 bg-primary/5">
+              <div className="flex items-start gap-3">
+                <Lightbulb className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-primary mb-1">Explanation</p>
+                  <p className="text-sm text-muted-foreground">{question.explanation}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-center">
             {!isSubmitted ? (
               <Button
@@ -384,9 +494,19 @@ const Quiz = () => {
               >
                 Submit Answer
               </Button>
+            ) : generatingAdaptive ? (
+              <Button variant="neon" size="lg" disabled>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Generating next question...
+              </Button>
             ) : (
               <Button variant="neon" size="lg" onClick={handleNextQuestion}>
-                {currentQuestion < questions.length - 1 ? (
+                {adaptiveMode ? (
+                  <>
+                    Next Adaptive Question
+                    <Brain className="h-4 w-4 ml-2" />
+                  </>
+                ) : currentQuestion < questions.length - 1 ? (
                   <>
                     Next Question
                     <ArrowRight className="h-4 w-4 ml-2" />
@@ -400,6 +520,12 @@ const Quiz = () => {
               </Button>
             )}
           </div>
+
+          {adaptiveMode && (
+            <p className="text-center text-xs text-muted-foreground mt-4">
+              Adaptive mode: Questions adjust based on your performance
+            </p>
+          )}
         </div>
       </main>
     </div>

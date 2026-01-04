@@ -1,3 +1,4 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -7,7 +8,7 @@ const corsHeaders = {
 };
 
 // Input validation and sanitization constants
-const MAX_NOTES_LENGTH = 50000; // Allow longer notes content
+const MAX_NOTES_LENGTH = 50000;
 const MAX_ID_LENGTH = 100;
 const FORBIDDEN_PATTERNS = [
   /ignore\s+(all\s+)?previous\s+instructions/i,
@@ -25,9 +26,6 @@ const FORBIDDEN_PATTERNS = [
   /override\s+instructions/i,
 ];
 
-/**
- * Validates and sanitizes user input to prevent prompt injection
- */
 function sanitizeInput(input: string, maxLength: number): { isValid: boolean; sanitized: string; error?: string } {
   if (!input || typeof input !== 'string') {
     return { isValid: false, sanitized: '', error: 'Input must be a non-empty string' };
@@ -41,7 +39,6 @@ function sanitizeInput(input: string, maxLength: number): { isValid: boolean; sa
     return { isValid: false, sanitized: '', error: `Input exceeds maximum length of ${maxLength} characters` };
   }
 
-  // Check for forbidden patterns (potential prompt injection)
   for (const pattern of FORBIDDEN_PATTERNS) {
     if (pattern.test(sanitized)) {
       console.warn('Potential prompt injection detected:', sanitized.substring(0, 50));
@@ -49,7 +46,6 @@ function sanitizeInput(input: string, maxLength: number): { isValid: boolean; sa
     }
   }
 
-  // Remove potentially dangerous characters
   sanitized = sanitized
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     .replace(/\\/g, '')
@@ -58,9 +54,6 @@ function sanitizeInput(input: string, maxLength: number): { isValid: boolean; sa
   return { isValid: true, sanitized };
 }
 
-/**
- * Validates ID format (alphanumeric with dashes/underscores)
- */
 function validateId(id: string): { isValid: boolean; error?: string } {
   if (!id || typeof id !== 'string') {
     return { isValid: false, error: 'ID must be a non-empty string' };
@@ -68,12 +61,50 @@ function validateId(id: string): { isValid: boolean; error?: string } {
   if (id.length > MAX_ID_LENGTH) {
     return { isValid: false, error: `ID exceeds maximum length of ${MAX_ID_LENGTH} characters` };
   }
-  // Allow UUID format
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
     return { isValid: false, error: 'Invalid ID format' };
   }
   return { isValid: true };
 }
+
+const SYSTEM_PROMPT = `You are an assessment designer specializing in conceptual understanding.
+
+Generate quiz questions that test deep comprehension, not surface recall.
+Wrong options must be plausible but incorrect.
+
+QUESTION DESIGN LOGIC:
+1. Identify core concepts from the notes
+2. Identify common misunderstandings
+3. Turn them into distractor options
+4. Ensure only one correct answer
+5. Avoid trick questions or ambiguity
+
+QUESTION TYPES TO INCLUDE:
+1. Concept Check - Tests understanding of main idea
+2. Mechanism Check - Tests how something works
+3. Application Check - Tests real-world usage
+4. Misconception Trap - Uses common wrong belief as an option
+5. "Why" Question - Tests reasoning, not facts
+
+QUALITY RULES:
+- No "All of the above"
+- No "None of the above"
+- Avoid absolute words (always, never)
+- Explanations must be simple and corrective
+
+You must respond with ONLY a valid JSON array, no markdown, no code blocks.
+Each question must have this structure:
+{
+  "id": 1,
+  "type": "concept_check",
+  "question": "Question text",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correctAnswer": 0,
+  "explanation": "1-2 lines explaining why the correct answer is right and why common wrong answers are incorrect"
+}
+
+Types: concept_check, mechanism_check, application_check, misconception_trap, why_question
+correctAnswer is the 0-based index of the correct option.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -81,9 +112,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const openAIApiKey = Deno.env.get("openai_api_key");
+    if (!openAIApiKey) {
+      throw new Error("OpenAI API key is not configured");
     }
 
     const authHeader = req.headers.get("Authorization");
@@ -117,7 +148,6 @@ serve(async (req) => {
       );
     }
 
-    // Validate and sanitize inputs
     const todoIdValidation = validateId(todoId);
     if (!todoIdValidation.isValid) {
       return new Response(
@@ -152,43 +182,32 @@ serve(async (req) => {
       );
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${openAIApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: `You are a quiz generator. Generate 5 multiple choice questions based on the provided notes.
-
-You must respond with ONLY a valid JSON array, no markdown, no code blocks.
-Each question must have this structure:
-{
-  "id": 1,
-  "question": "Question text",
-  "options": ["Option A", "Option B", "Option C", "Option D"],
-  "correctAnswer": 0
-}
-
-correctAnswer is the 0-based index of the correct option.
-Make questions progressively harder.
-Include a mix of recall, understanding, and application questions.`,
+            content: SYSTEM_PROMPT,
           },
           {
             role: "user",
-            content: `Generate 5 MCQ questions based on these notes:\n\n${sanitizedNotes}`,
+            content: `Generate 5 MCQ questions based on these study notes:\n\n${sanitizedNotes}`,
           },
         ],
+        max_tokens: 2000,
+        temperature: 0.7,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("OpenAI API error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(
@@ -197,14 +216,7 @@ Include a mix of recall, understanding, and application questions.`,
         );
       }
       
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
 
     const aiData = await response.json();
@@ -214,7 +226,6 @@ Include a mix of recall, understanding, and application questions.`,
       throw new Error("No content generated from AI");
     }
 
-    // Parse the questions
     let questions;
     try {
       let cleanContent = questionsContent.trim();
@@ -224,44 +235,52 @@ Include a mix of recall, understanding, and application questions.`,
       questions = JSON.parse(cleanContent.trim());
     } catch (parseError) {
       console.error("Failed to parse questions:", parseError);
-      // Fallback questions
       questions = [
         {
           id: 1,
+          type: "concept_check",
           question: "What is the main concept covered in this material?",
           options: ["Option A", "Option B", "Option C", "Option D"],
-          correctAnswer: 0
+          correctAnswer: 0,
+          explanation: "This tests your understanding of the core concept presented."
         },
         {
           id: 2,
-          question: "Which statement best describes the topic?",
+          type: "mechanism_check",
+          question: "How does this process work?",
           options: ["Statement A", "Statement B", "Statement C", "Statement D"],
-          correctAnswer: 1
+          correctAnswer: 1,
+          explanation: "Understanding the mechanism helps you apply the concept."
         },
         {
           id: 3,
-          question: "What is an important takeaway from this content?",
-          options: ["Takeaway A", "Takeaway B", "Takeaway C", "Takeaway D"],
-          correctAnswer: 2
+          type: "application_check",
+          question: "How can this knowledge be applied in practice?",
+          options: ["Application A", "Application B", "Application C", "Application D"],
+          correctAnswer: 2,
+          explanation: "Real-world application demonstrates true understanding."
         },
         {
           id: 4,
-          question: "How can this knowledge be applied?",
-          options: ["Application A", "Application B", "Application C", "Application D"],
-          correctAnswer: 0
+          type: "misconception_trap",
+          question: "Which of the following is a common misconception?",
+          options: ["Misconception A", "Misconception B", "Misconception C", "Correct understanding"],
+          correctAnswer: 3,
+          explanation: "Identifying misconceptions helps solidify correct understanding."
         },
         {
           id: 5,
-          question: "What is the key principle discussed?",
-          options: ["Principle A", "Principle B", "Principle C", "Principle D"],
-          correctAnswer: 1
+          type: "why_question",
+          question: "Why is this concept important?",
+          options: ["Reason A", "Reason B", "Reason C", "Reason D"],
+          correctAnswer: 1,
+          explanation: "Understanding 'why' deepens your comprehension."
         }
       ];
     }
 
     console.log("Quiz generated successfully");
 
-    // Save quiz to database
     const { data: savedQuiz, error: saveError } = await supabaseClient
       .from("quizzes")
       .insert({
