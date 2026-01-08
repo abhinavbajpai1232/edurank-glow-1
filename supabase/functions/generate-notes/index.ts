@@ -134,9 +134,9 @@ serve(async (req) => {
   }
 
   try {
-    const NVIDIA_API_KEY = Deno.env.get("nvidiaapi_key");
-    if (!NVIDIA_API_KEY) {
-      throw new Error("NVIDIA API key is not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     const authHeader = req.headers.get("Authorization");
@@ -229,15 +229,15 @@ serve(async (req) => {
     // Fetch video context using Perplexity
     const videoContext = await fetchVideoContext(sanitizedTitle, videoId);
 
-    // Generate notes using NVIDIA AI
-    const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+    // Generate notes using Lovable AI (Gemini)
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${NVIDIA_API_KEY}`,
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+        model: "google/gemini-2.5-flash",
         messages: [
           {
             role: "system",
@@ -283,7 +283,7 @@ Make the notes comprehensive and educational.`
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("NVIDIA API error:", response.status, errorText);
+      console.error("Lovable AI error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(
@@ -291,18 +291,25 @@ Make the notes comprehensive and educational.`
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ error: "AI credits exhausted. Please add funds." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       
-      throw new Error(`NVIDIA API error: ${response.status}`);
+      throw new Error(`Lovable AI error: ${response.status}`);
     }
 
     const aiData = await response.json();
     const generatedNotes = aiData.choices?.[0]?.message?.content;
 
     if (!generatedNotes) {
+      console.error("AI response:", JSON.stringify(aiData));
       throw new Error("No content generated from AI");
     }
 
-    console.log("Notes generated successfully using NVIDIA AI");
+    console.log("Notes generated successfully using Lovable AI");
 
     // Check achievements after generating notes
     await serviceClient.rpc('check_achievements', { uid: user.id });
