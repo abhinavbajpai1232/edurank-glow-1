@@ -17,6 +17,7 @@ import Leaderboard from "./pages/Leaderboard";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import FixWeakAreas from "./pages/FixWeakAreas";
+import Analysis from "./pages/Analysis";
 
 const queryClient = new QueryClient();
 
@@ -100,6 +101,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <FixWeakAreas />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analysis"
+              element={
+                <ProtectedRoute>
+                  <Analysis />
                 </ProtectedRoute>
               }
             />

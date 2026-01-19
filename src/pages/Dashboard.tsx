@@ -292,6 +292,9 @@ const Dashboard = () => {
             <span className="text-sm text-muted-foreground hidden lg:block">
               Hi, {displayName}!
             </span>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/analysis')} title="Your Analysis">
+              <TrendingUp className="h-5 w-5" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => navigate('/leaderboard')} title="Leaderboard">
               <Trophy className="h-5 w-5" />
             </Button>
