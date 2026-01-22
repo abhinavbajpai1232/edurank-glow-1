@@ -17,7 +17,7 @@ const ALLOWED_ORIGINS = [
 
 function getCORSHeaders(originHeader: string | null): Record<string, string> {
   // Only allow requests from whitelisted origins
-  const allowedOrigin = ALLOWED_ORIGINS.includes(originHeader || '')
+  const allowedOrigin = (originHeader && ALLOWED_ORIGINS.includes(originHeader))
     ? originHeader
     : ALLOWED_ORIGINS[0];
 
@@ -365,9 +365,10 @@ Break this into 3-5 subtasks and provide optimized YouTube search queries for ed
   } catch (error: unknown) {
     console.error('Error in find-video function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorCorsHeaders = getCORSHeaders(null);
     return new Response(
       JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...errorCorsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

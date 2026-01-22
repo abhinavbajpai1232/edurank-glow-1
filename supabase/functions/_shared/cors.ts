@@ -19,7 +19,7 @@ const ALLOWED_ORIGINS = [
  */
 export function getCORSHeaders(originHeader: string | null): Record<string, string> {
   // Default to the first allowed origin if origin is not provided or not in whitelist
-  const allowedOrigin = ALLOWED_ORIGINS.includes(originHeader || '')
+  const allowedOrigin = (originHeader && ALLOWED_ORIGINS.includes(originHeader))
     ? originHeader
     : ALLOWED_ORIGINS[0];
 

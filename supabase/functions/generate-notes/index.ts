@@ -17,7 +17,7 @@ const ALLOWED_ORIGINS = [
 
 function getCORSHeaders(originHeader: string | null): Record<string, string> {
   // Only allow requests from whitelisted origins
-  const allowedOrigin = ALLOWED_ORIGINS.includes(originHeader || '')
+  const allowedOrigin = (originHeader && ALLOWED_ORIGINS.includes(originHeader))
     ? originHeader
     : ALLOWED_ORIGINS[0];
 
@@ -268,8 +268,8 @@ serve(async (req) => {
     // Fetch video context using Perplexity
     const videoContext = await fetchVideoContext(sanitizedTitle, videoId);
 
-    // Generate notes using Lovable AI
-    const generatedNotes = await callLovableAI([
+    // Generate notes using Bytez AI
+    const generatedNotes = await callBytezAI([
       {
         role: 'user',
         content: `You are an expert educational content creator specializing in generating comprehensive, well-structured study notes. 
@@ -350,9 +350,10 @@ Make the notes comprehensive and educational.`
 
   } catch (error) {
     console.error("Error in generate-notes function:", error);
+    const errorCorsHeaders = getCORSHeaders(null);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...errorCorsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

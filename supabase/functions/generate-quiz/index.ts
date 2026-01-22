@@ -17,7 +17,7 @@ const ALLOWED_ORIGINS = [
 
 function getCORSHeaders(originHeader: string | null): Record<string, string> {
   // Only allow requests from whitelisted origins
-  const allowedOrigin = ALLOWED_ORIGINS.includes(originHeader || '')
+  const allowedOrigin = (originHeader && ALLOWED_ORIGINS.includes(originHeader))
     ? originHeader
     : ALLOWED_ORIGINS[0];
 
@@ -333,9 +333,10 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Error in generate-quiz function:", error);
+    const errorCorsHeaders = getCORSHeaders(null);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...errorCorsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

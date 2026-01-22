@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { useDailyChallenges, getDifficultyColor, getChallengeIcon, UserDailyChallenge } from '@/hooks/useDailyChallenges';
+import { useStreakFreeze } from '@/hooks/useStreakFreeze';
 import { 
   Loader2, 
   Zap, 
@@ -13,7 +14,8 @@ import {
   FileQuestion, 
   HelpCircle,
   Flame,
-  Gift
+  Gift,
+  Snowflake
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -29,8 +31,10 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export const DailyChallengesCard = () => {
   const { challenges, loading, completedCount, totalCount, totalXpEarned, getTimeRemaining } = useDailyChallenges();
+  const { addStreakProtection } = useStreakFreeze();
   const [timeRemaining, setTimeRemaining] = useState(getTimeRemaining());
   const [previousCompleted, setPreviousCompleted] = useState(0);
+  const hasAwardedProtection = useRef(false);
 
   // Update time remaining every minute
   useEffect(() => {
@@ -40,7 +44,7 @@ export const DailyChallengesCard = () => {
     return () => clearInterval(interval);
   }, [getTimeRemaining]);
 
-  // Celebrate when a challenge is completed
+  // Celebrate when a challenge is completed and award streak protection when all done
   useEffect(() => {
     if (completedCount > previousCompleted && previousCompleted > 0) {
       confetti({
@@ -48,9 +52,15 @@ export const DailyChallengesCard = () => {
         spread: 60,
         origin: { y: 0.7 },
       });
+      
+      // Award streak protection when all challenges are completed
+      if (completedCount === totalCount && totalCount > 0 && !hasAwardedProtection.current) {
+        hasAwardedProtection.current = true;
+        addStreakProtection(1);
+      }
     }
     setPreviousCompleted(completedCount);
-  }, [completedCount, previousCompleted]);
+  }, [completedCount, previousCompleted, totalCount, addStreakProtection]);
 
   if (loading) {
     return (
@@ -132,7 +142,10 @@ export const DailyChallengesCard = () => {
             className="text-center py-2"
           >
             <p className="text-sm font-medium text-green-500">🎉 All challenges completed!</p>
-            <p className="text-xs text-muted-foreground">Come back tomorrow for new challenges</p>
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+              <Snowflake className="h-3 w-3 text-cyan-500" />
+              +1 Streak Protection earned!
+            </p>
           </motion.div>
         )}
       </CardContent>
