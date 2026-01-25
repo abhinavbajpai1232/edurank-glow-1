@@ -1,27 +1,34 @@
 /**
  * Bytez API Integration
  * Handles all AI requests for notes generation, video search, and quiz generation
+ * Using the official bytez.js package
  */
 
 // Note: In production, keep API keys in environment variables
 const BYTEZ_API_KEY = import.meta.env.VITE_BYTEZ_API_KEY || "2622dd06541127bea7641c3ad0ed8859";
 
+// Import Bytez SDK
+let Bytez: any;
+
+// Dynamically import bytez.js to handle optional installation
+try {
+  const bytezModule = await import('bytez.js');
+  Bytez = bytezModule.default || bytezModule;
+} catch (error) {
+  console.warn('bytez.js not installed, using fallback implementation');
+}
+
 /**
- * Initialize Bytez SDK (placeholder - actual implementation would use bytez.js package)
- * For now, we'll create a wrapper around the Bytez API
+ * Initialize Bytez SDK with API key
  */
+let sdk: any;
 
-export interface BytezModel {
-  run(messages: Array<{ role: string; content: string }>): Promise<{ error?: string; output?: string }>;
-}
-
-export interface BytezSDK {
-  model(modelName: string): BytezModel;
-}
-
-// Mock Bytez initialization - replace with actual bytez.js when installed
-const createBytezSDK = (): BytezSDK => {
-  return {
+if (Bytez) {
+  // Use actual bytez.js package
+  sdk = new Bytez(BYTEZ_API_KEY);
+} else {
+  // Fallback implementation if bytez.js is not installed
+  sdk = {
     model: (modelName: string) => ({
       run: async (messages: Array<{ role: string; content: string }>) => {
         try {
@@ -56,9 +63,7 @@ const createBytezSDK = (): BytezSDK => {
       },
     }),
   };
-};
-
-const sdk = createBytezSDK();
+}
 
 /**
  * Generate study notes using GPT-4.1-mini
@@ -112,6 +117,104 @@ Please provide detailed, comprehensive study notes that help students understand
   }
 
   return { notes: output };
+}
+
+/**
+ * Generate quiz questions specifically for notes using Gemini-3-pro-preview
+ * This function creates quiz questions based on study notes
+ */
+export async function generateNotesQuizWithBytez(
+  notes: string,
+  filters: {
+    class?: string;
+    subject?: string;
+    board?: string;
+    language?: string;
+  },
+  questionCount: number = 10,
+  difficultyLevel: 'easy' | 'medium' | 'hard' = 'medium'
+): Promise<{ questions?: any[]; error?: string }> {
+  try {
+    const model = sdk.model('google/gemini-3-pro-preview');
+
+    const classNote = filters.class ? `Class/Level: ${filters.class}` : '';
+    const boardNote = filters.board ? `Board: ${filters.board}` : '';
+    const languageNote = filters.language ? `Language: ${filters.language}` : '';
+
+    const prompt = `Generate ${questionCount} comprehensive multiple-choice quiz questions based on the provided study notes.
+
+${classNote}
+${boardNote}
+Subject: ${filters.subject || 'General'}
+${languageNote}
+Difficulty Level: ${difficultyLevel}
+
+Study Notes to Create Questions From:
+${notes}
+
+Requirements:
+- Create questions that test deep understanding, not just memorization
+- Ensure questions progressively build on each other
+- Provide exactly 4 options for each question (A, B, C, D)
+- Clearly mark the correct answer
+- Include detailed explanations for why each answer is correct or incorrect
+- Make incorrect options realistic and educationally valuable
+- Ensure questions cover all major concepts from the notes
+- Match the ${difficultyLevel} difficulty level appropriately
+- Questions should be suitable for the ${filters.class || 'General'} class level
+
+Format your response as a valid JSON array with this exact structure:
+[
+  {
+    "id": 1,
+    "question": "Question text here?",
+    "options": {
+      "a": "Option A",
+      "b": "Option B", 
+      "c": "Option C",
+      "d": "Option D"
+    },
+    "correctAnswer": "a",
+    "explanation": "Detailed explanation of why this answer is correct and why others are wrong"
+  }
+]
+
+Return ONLY the JSON array, no markdown, no code blocks, no extra text.`;
+
+    const { error, output } = await model.run([
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ]);
+
+    if (error) {
+      return { error: `Failed to generate notes quiz: ${error}` };
+    }
+
+    try {
+      // Parse the JSON response - clean up markdown if present
+      let jsonString = output || '[]';
+      if (jsonString.includes('```json')) {
+        jsonString = jsonString.split('```json')[1].split('```')[0].trim();
+      } else if (jsonString.includes('```')) {
+        jsonString = jsonString.split('```')[1].split('```')[0].trim();
+      }
+      
+      const questions = JSON.parse(jsonString);
+      
+      // Validate questions structure
+      if (!Array.isArray(questions)) {
+        return { error: 'Invalid quiz format returned from API' };
+      }
+
+      return { questions };
+    } catch (parseError) {
+      return { error: 'Failed to parse quiz questions from API response' };
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unknown error generating notes quiz' };
+  }
 }
 
 /**
@@ -181,6 +284,131 @@ Return ONLY the JSON array, no markdown or extra text.`;
     return { questions };
   } catch (parseError) {
     return { error: 'Failed to parse quiz questions' };
+  }
+}
+
+/**
+ * Find the best educational videos on YouTube for a specific topic using Gemini-3-pro-preview
+ * This function identifies high-quality, curriculum-aligned video resources
+ * Excludes YouTube Shorts and prioritizes full-length educational content
+ */
+export async function findBestVideoOnYoutubeBytez(
+  topic: string,
+  filters: {
+    class?: string;
+    subject?: string;
+    board?: string;
+    language?: string;
+    videoType?: string;
+    minDuration?: number; // in minutes
+  } = {}
+): Promise<{ videos?: any[]; error?: string }> {
+  try {
+    // Validate that user is not searching for YouTube shorts
+    if (topic.toLowerCase().includes('shorts') || topic.includes('youtube.com/shorts')) {
+      return {
+        error: 'YouTube Shorts are not supported for learning. Please search for full-length educational videos instead.',
+      };
+    }
+
+    const model = sdk.model('google/gemini-3-pro-preview');
+
+    const classNote = filters.class ? `Class/Level: ${filters.class}` : '';
+    const boardNote = filters.board ? `Board: ${filters.board}` : '';
+    const videoTypeNote = filters.videoType ? `Preferred Video Type: ${filters.videoType}` : '';
+    const minDurationNote = filters.minDuration ? `Minimum Duration: ${filters.minDuration} minutes` : 'Minimum Duration: 10 minutes';
+
+    const prompt = `Find and recommend the BEST educational videos on YouTube for learning about: "${topic}"
+
+${classNote}
+${boardNote}
+Subject: ${filters.subject || 'General'}
+Language: ${filters.language || 'English'}
+${videoTypeNote}
+${minDurationNote}
+
+CRITICAL REQUIREMENTS:
+1. EXCLUDE ALL YouTube Shorts - only recommend full-length videos (minimum ${filters.minDuration || 10} minutes)
+2. Select ONLY videos from highly reputable, verified educational channels
+3. Content MUST align with the ${filters.class || 'general'} class curriculum
+4. Videos must have excellent pedagogical value
+5. All videos must be appropriate for the age group/class specified
+6. Ensure content is accurate, current, and well-explained
+
+Find 5-7 of the ABSOLUTE BEST videos and provide:
+- Exact video title
+- Channel name (exact name)
+- Video duration in minutes (must be >= ${filters.minDuration || 10})
+- YouTube Video ID (the alphanumeric code from URL)
+- Comprehensive description (3-4 sentences)
+- Why this specific video is excellent for learning this topic
+- Educational quality score (1-10)
+- Engagement/presentation score (1-10)
+- Key topics covered
+
+IMPORTANT: Only suggest videos you are confident are from legitimate, well-known educational channels.
+
+Format response as valid JSON array:
+[
+  {
+    "title": "Exact video title",
+    "channel": "Channel name",
+    "duration": 15,
+    "videoId": "dQw4w9WgXcQ",
+    "description": "3-4 sentence description of content",
+    "why": "Specific reasons this video is excellent for learning",
+    "educationScore": 9,
+    "engagementScore": 8,
+    "topicsCovered": ["concept1", "concept2", "concept3"]
+  }
+]
+
+Return ONLY the JSON array, no markdown, no code blocks, no additional text.`;
+
+    const { error, output } = await model.run([
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ]);
+
+    if (error) {
+      return { error: `Failed to find videos: ${error}` };
+    }
+
+    try {
+      // Parse the JSON response - handle markdown code blocks
+      let jsonString = output || '[]';
+      if (jsonString.includes('```json')) {
+        jsonString = jsonString.split('```json')[1].split('```')[0].trim();
+      } else if (jsonString.includes('```')) {
+        jsonString = jsonString.split('```')[1].split('```')[0].trim();
+      }
+      
+      const videos = JSON.parse(jsonString);
+
+      if (!Array.isArray(videos)) {
+        return { error: 'Invalid video format returned from API' };
+      }
+
+      // Additional client-side validation to ensure no shorts
+      const validVideos = videos.filter((video: any) => {
+        const minDurationMinutes = filters.minDuration || 10;
+        return video.duration && video.duration >= minDurationMinutes && video.videoId;
+      });
+
+      if (validVideos.length === 0) {
+        return {
+          error: 'No suitable educational videos found matching your criteria. Please try a different search or check your filters.',
+        };
+      }
+
+      return { videos: validVideos };
+    } catch (parseError) {
+      return { error: 'Failed to parse video search results from API response' };
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unknown error finding videos' };
   }
 }
 
