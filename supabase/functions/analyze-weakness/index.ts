@@ -1,22 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Allowed origins for CORS - prevents CSRF attacks
+// Allowed origins for CORS
 const ALLOWED_ORIGINS = [
-  // Production
   'https://edurank.app',
   'https://www.edurank.app',
-  
-  // Development
   'http://localhost:5173',
   'http://localhost:3000',
-  
-  // Fallback
   'https://lovable.dev',
 ];
 
 function getCORSHeaders(originHeader: string | null): Record<string, string> {
-  // Only allow requests from whitelisted origins
   const allowedOrigin = (originHeader && ALLOWED_ORIGINS.includes(originHeader))
     ? originHeader
     : ALLOWED_ORIGINS[0];
@@ -84,7 +78,7 @@ async function searchYouTubeForTopic(topic: string, apiKey: string): Promise<You
   }
 }
 
-// Compute weakness score using the algorithm from requirements
+// Compute weakness score
 function computeWeaknessScore(
   accuracy: number,
   avgTimeUser: number,
@@ -94,19 +88,15 @@ function computeWeaknessScore(
   wrongOnMedium: number,
   wrongOnHard: number
 ): number {
-  // Accuracy penalty (0-50)
   const accuracyPenalty = (1 - accuracy) * 50;
   
-  // Time penalty (0-20)
   let timePenalty = 0;
   if (avgTimeGlobal > 0 && avgTimeUser > avgTimeGlobal) {
     timePenalty = Math.min(20, ((avgTimeUser - avgTimeGlobal) / avgTimeGlobal) * 20);
   }
   
-  // Consistency penalty for repeated mistakes
   const consistencyPenalty = repeatedMistakes >= 2 ? 15 : 0;
   
-  // Difficulty penalty
   let difficultyPenalty = 0;
   if (wrongOnHard > 0) {
     difficultyPenalty = 15;
@@ -119,7 +109,6 @@ function computeWeaknessScore(
   return Math.min(100, accuracyPenalty + timePenalty + consistencyPenalty + difficultyPenalty);
 }
 
-// Classify topic strength based on weakness score
 function classifyStrength(weaknessScore: number, totalQuestions: number): string {
   if (totalQuestions < 3) return "insufficient_data";
   if (weaknessScore <= 25) return "strong";
@@ -127,23 +116,25 @@ function classifyStrength(weaknessScore: number, totalQuestions: number): string
   return "weak";
 }
 
-// Bytez AI call function (using Gemini-3-pro-preview for weakness analysis)
-async function callBytezAI(messages: { role: string; content: string }[]): Promise<string> {
-  const BYTEZ_API_KEY = Deno.env.get('BYTEZ_API_KEY');
-  if (!BYTEZ_API_KEY) {
-    throw new Error('BYTEZ_API_KEY is not configured');
+// Lovable AI Gateway call
+const LOVABLE_AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+async function callLovableAI(messages: { role: string; content: string }[]): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log('Calling Bytez AI (Gemini-3-pro-preview) for weakness analysis...');
+  console.log("Calling Lovable AI (gemini-3-flash-preview) for weakness analysis...");
   
-  const response = await fetch('https://api.bytez.com/v1/chat/completions', {
-    method: 'POST',
+  const response = await fetch(LOVABLE_AI_GATEWAY, {
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${BYTEZ_API_KEY}`,
-      'Content-Type': 'application/json',
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: 'google/gemini-3-pro-preview',
+      model: "google/gemini-3-flash-preview",
       messages,
       temperature: 0.7,
       max_tokens: 2000,
@@ -151,24 +142,25 @@ async function callBytezAI(messages: { role: string; content: string }[]): Promi
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Bytez AI error:', response.status, errorText);
+    console.error("Lovable AI error:", response.status);
     
     if (response.status === 429) {
-      throw new Error('Rate limit exceeded. Please try again later.');
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    if (response.status === 402) {
+      throw new Error("Payment required. Please add funds to your Lovable AI workspace.");
     }
     if (response.status === 401) {
-      throw new Error('Invalid API key or authentication failed.');
+      throw new Error("Invalid API key or authentication failed.");
     }
-    throw new Error(`Bytez AI error: ${response.status}`);
+    throw new Error(`AI gateway error: ${response.status}`);
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || '';
+  return data.choices?.[0]?.message?.content || "";
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     const corsHeaders = getCORSHeaders(req.headers.get('origin'));
     return new Response(null, { headers: corsHeaders });
@@ -194,7 +186,6 @@ serve(async (req) => {
 
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Validate JWT
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
     
@@ -224,23 +215,24 @@ serve(async (req) => {
     try {
       const questionTexts = questions.map((q: any) => q.questionText).join("\n---\n");
       
-      const topicsText = await callBytezAI([
+      const topicsText = await callLovableAI([
         {
-          role: 'user',
-          content: `You are an educational topic classifier. For each question, identify the main concept/topic being tested. 
+          role: "system",
+          content: `You are an educational topic classifier. For each question, identify the main concept/topic being tested.
 Return a JSON array of topic names, one for each question.
 Topics should be concise (2-4 words), educational, and specific.
-Examples: "Neural Networks", "Backpropagation", "Activation Functions", "Gradient Descent", "Data Preprocessing"
+Examples: "Neural Networks", "Backpropagation", "Activation Functions"
 
-IMPORTANT: Return ONLY a valid JSON array of strings, nothing else.
-
-Extract the main topic for each of these ${questions.length} questions (separated by ---):
+IMPORTANT: Return ONLY a valid JSON array of strings, nothing else.`
+        },
+        {
+          role: "user",
+          content: `Extract the main topic for each of these ${questions.length} questions (separated by ---):
 
 ${questionTexts}`
         }
       ]);
 
-      // Parse topics from AI response
       const jsonMatch = topicsText.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const topics = JSON.parse(jsonMatch[0]);
@@ -255,7 +247,6 @@ ${questionTexts}`
       console.error("AI topic extraction failed:", aiError);
     }
 
-    // Fallback if AI failed
     if (questionsWithTopics.length === 0) {
       questions.forEach((q: any) => {
         questionsWithTopics.push({
@@ -270,7 +261,6 @@ ${questionTexts}`
     const topicIdMap: Record<string, string> = {};
 
     for (const topicName of uniqueTopics) {
-      // Try to get existing topic
       let { data: topic } = await serviceClient
         .from("topics")
         .select("id")
@@ -278,7 +268,6 @@ ${questionTexts}`
         .maybeSingle();
 
       if (!topic) {
-        // Create new topic
         const { data: newTopic, error } = await serviceClient
           .from("topics")
           .insert({ name: topicName })
@@ -297,7 +286,7 @@ ${questionTexts}`
       }
     }
 
-    // Step 3: Get attempt number for this quiz
+    // Step 3: Get attempt number
     const { count: existingAttempts } = await supabaseClient
       .from("question_attempts")
       .select("*", { count: "exact", head: true })
@@ -362,19 +351,17 @@ ${questionTexts}`
       perf.totalTimeSeconds += q.timeTakenSeconds || 0;
     });
 
-    // Step 6: Get historical data and compute weakness scores
+    // Step 6: Compute weakness scores and update performance
     const weakTopics: any[] = [];
     const recommendations: any[] = [];
 
     for (const [topicId, perf] of Object.entries(topicPerformance)) {
-      // Get existing user performance for this topic
       const { data: existingPerf } = await supabaseClient
         .from("user_topic_performance")
         .select("*")
         .eq("topic_id", topicId)
         .maybeSingle();
 
-      // Get global stats for benchmarking
       const { data: globalStats } = await serviceClient
         .from("global_topic_stats")
         .select("*")
@@ -383,13 +370,11 @@ ${questionTexts}`
 
       const globalAvgTime = globalStats?.avg_time_seconds || 30;
 
-      // Compute cumulative stats (weight = 1/attempt_number for decay)
       const newTotalQuestions = (existingPerf?.total_questions || 0) + perf.totalQuestions;
       const newCorrectAnswers = (existingPerf?.correct_answers || 0) + perf.correctAnswers;
       const newTotalTime = (existingPerf?.total_time_seconds || 0) + perf.totalTimeSeconds;
       const newAvgTime = newTotalTime / newTotalQuestions;
       
-      // Track repeated mistakes
       let repeatedMistakes = existingPerf?.repeated_mistakes || 0;
       if (!perf.correctAnswers && existingPerf && !existingPerf.correct_answers) {
         repeatedMistakes++;
@@ -399,10 +384,8 @@ ${questionTexts}`
       const newWrongMedium = (existingPerf?.wrong_on_medium || 0) + perf.wrongOnMedium;
       const newWrongHard = (existingPerf?.wrong_on_hard || 0) + perf.wrongOnHard;
 
-      // Compute accuracy
       const accuracy = newCorrectAnswers / newTotalQuestions;
 
-      // Compute weakness score
       const weaknessScore = computeWeaknessScore(
         accuracy,
         newAvgTime,
@@ -416,8 +399,7 @@ ${questionTexts}`
       const previousScore = existingPerf?.weakness_score || 0;
       const strengthStatus = classifyStrength(weaknessScore, newTotalQuestions);
 
-      // Upsert user topic performance
-      const { error: upsertError } = await supabaseClient
+      await supabaseClient
         .from("user_topic_performance")
         .upsert({
           user_id: userId,
@@ -437,11 +419,6 @@ ${questionTexts}`
           onConflict: "user_id,topic_id"
         });
 
-      if (upsertError) {
-        console.error("Error upserting performance:", upsertError);
-      }
-
-      // Update video topic analysis
       const videoAccuracy = perf.correctAnswers / perf.totalQuestions;
       const isWeakInVideo = (1 - videoAccuracy) * 100 > 50;
 
@@ -461,7 +438,6 @@ ${questionTexts}`
           onConflict: "user_id,video_id,topic_id"
         });
 
-      // Update global stats
       await serviceClient
         .from("global_topic_stats")
         .upsert({
@@ -477,7 +453,6 @@ ${questionTexts}`
           onConflict: "topic_id"
         });
 
-      // Track weak topics for recommendations
       if (strengthStatus === "weak") {
         weakTopics.push({
           topicId,
@@ -486,7 +461,6 @@ ${questionTexts}`
           accuracy: accuracy * 100,
         });
 
-        // Find a video for this weak topic using YouTube API
         const youtubeApiKey = Deno.env.get("youtube_api_key");
         let videoData: YouTubeVideo | null = null;
         
@@ -497,7 +471,6 @@ ${questionTexts}`
           }
         }
 
-        // Generate recommendation with video if found
         const recommendationTitle = `Fix: ${perf.topicName}`;
         const minutes = Math.max(3, Math.ceil(weaknessScore / 20));
         const description = videoData 
@@ -516,24 +489,20 @@ ${questionTexts}`
           video_id: videoData?.videoId || null,
           video_title: videoData?.title || null,
           video_channel: videoData?.channel || null,
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         });
       }
 
-      // Check for Comeback King achievement (30% improvement)
       if (previousScore > 0 && weaknessScore > 0) {
         const improvement = ((previousScore - weaknessScore) / previousScore) * 100;
         if (improvement >= 30) {
           console.log(`User ${userId} achieved Comeback King! Improvement: ${improvement}%`);
-          // Trigger achievement check
           await serviceClient.rpc("check_achievements", { uid: userId });
         }
       }
     }
 
-    // Insert recommendations (remove old ones first)
     if (recommendations.length > 0) {
-      // Clear old recommendations for same topics
       const topicIds = recommendations.map(r => r.topic_id);
       await supabaseClient
         .from("recommendation_queue")
@@ -541,13 +510,11 @@ ${questionTexts}`
         .eq("user_id", userId)
         .in("topic_id", topicIds);
 
-      // Insert new
       await supabaseClient
         .from("recommendation_queue")
         .insert(recommendations);
     }
 
-    // Update leaderboard stats
     const { data: allResults } = await supabaseClient
       .from("quiz_results")
       .select("score, correct_answers, total_questions")
