@@ -1,22 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Allowed origins for CORS - prevents CSRF attacks
+// Allowed origins for CORS
 const ALLOWED_ORIGINS = [
-  // Production
   'https://edurank.app',
   'https://www.edurank.app',
-  
-  // Development
   'http://localhost:5173',
   'http://localhost:3000',
-  
-  // Fallback
   'https://lovable.dev',
 ];
 
 function getCORSHeaders(originHeader: string | null): Record<string, string> {
-  // Only allow requests from whitelisted origins
   const allowedOrigin = (originHeader && ALLOWED_ORIGINS.includes(originHeader))
     ? originHeader
     : ALLOWED_ORIGINS[0];
@@ -29,7 +23,6 @@ function getCORSHeaders(originHeader: string | null): Record<string, string> {
   };
 }
 
-// Input validation and sanitization constants
 const MAX_TOPIC_LENGTH = 200;
 const FORBIDDEN_PATTERNS = [
   /ignore\s+(all\s+)?previous\s+instructions/i,
@@ -62,7 +55,7 @@ function sanitizeInput(input: string, maxLength: number = MAX_TOPIC_LENGTH): { i
 
   for (const pattern of FORBIDDEN_PATTERNS) {
     if (pattern.test(sanitized)) {
-      console.warn('Potential prompt injection detected:', sanitized.substring(0, 50));
+      console.warn('Potential prompt injection detected');
       return { isValid: false, sanitized: '', error: 'Invalid input detected' };
     }
   }
@@ -105,12 +98,10 @@ function formatDuration(isoDuration: string): string {
 async function searchYouTube(query: string, apiKey: string, maxResults: number = 10): Promise<YouTubeVideo[]> {
   console.log(`Searching YouTube for: "${query}"`);
   
-  // SECURITY: Don't log URLs with API keys as they may end up in logs/error reports
   const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&videoDuration=medium&videoEmbeddable=true&maxResults=${maxResults}&key=${apiKey}`;
   
   const searchResponse = await fetch(searchUrl);
   if (!searchResponse.ok) {
-    // Don't log full response as it may expose sensitive headers
     console.error('YouTube search error:', searchResponse.status);
     throw new Error(`YouTube API error: ${searchResponse.status}`);
   }
@@ -122,7 +113,6 @@ async function searchYouTube(query: string, apiKey: string, maxResults: number =
     return [];
   }
   
-  // Don't log API keys in URLs
   const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails,snippet&id=${videoIds}&key=${apiKey}`;
   
   const detailsResponse = await fetch(detailsUrl);
@@ -174,23 +164,25 @@ function formatViewCount(count: number): string {
   return count.toString();
 }
 
-// Bytez AI call function (using Gemini-3-pro-preview for video discovery)
-async function callBytezAI(messages: { role: string; content: string }[]): Promise<string> {
-  const BYTEZ_API_KEY = Deno.env.get('BYTEZ_API_KEY');
-  if (!BYTEZ_API_KEY) {
-    throw new Error('BYTEZ_API_KEY is not configured');
+// Lovable AI Gateway call
+const LOVABLE_AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+async function callLovableAI(messages: { role: string; content: string }[]): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log('Calling Bytez AI (Gemini-3-pro-preview) for video discovery...');
+  console.log("Calling Lovable AI (gemini-3-flash-preview) for video discovery...");
   
-  const response = await fetch('https://api.bytez.com/v1/chat/completions', {
-    method: 'POST',
+  const response = await fetch(LOVABLE_AI_GATEWAY, {
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${BYTEZ_API_KEY}`,
-      'Content-Type': 'application/json',
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: 'google/gemini-3-pro-preview',
+      model: "google/gemini-3-flash-preview",
       messages,
       temperature: 0.7,
       max_tokens: 2000,
@@ -198,24 +190,25 @@ async function callBytezAI(messages: { role: string; content: string }[]): Promi
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Bytez AI error:', response.status, errorText);
+    console.error("Lovable AI error:", response.status);
     
     if (response.status === 429) {
-      throw new Error('Rate limit exceeded. Please try again later.');
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    if (response.status === 402) {
+      throw new Error("Payment required. Please add funds to your Lovable AI workspace.");
     }
     if (response.status === 401) {
-      throw new Error('Invalid API key or authentication failed.');
+      throw new Error("Invalid API key or authentication failed.");
     }
-    throw new Error(`Bytez AI error: ${response.status}`);
+    throw new Error(`AI gateway error: ${response.status}`);
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || '';
+  return data.choices?.[0]?.message?.content || "";
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     const corsHeaders = getCORSHeaders(req.headers.get('origin'));
     return new Response(null, { headers: corsHeaders });
@@ -224,7 +217,6 @@ serve(async (req) => {
   try {
     const corsHeaders = getCORSHeaders(req.headers.get('origin'));
     
-    // Get authorization header and verify user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -233,14 +225,12 @@ serve(async (req) => {
       );
     }
 
-    // Create Supabase client with user context
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    // Get user from auth header
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       return new Response(
@@ -270,9 +260,9 @@ serve(async (req) => {
 
     console.log('Finding videos for topic:', sanitizedTopic);
 
-    const content = await callBytezAI([
+    const content = await callLovableAI([
       {
-        role: 'user',
+        role: "system",
         content: `You are an educational content planner. Break down learning topics into 3-5 logical subtasks/subtopics that someone would need to learn to master the main topic.
 
 You must respond with ONLY a valid JSON object, no markdown, no code blocks.
@@ -287,13 +277,17 @@ The JSON must have this exact structure:
   "mainSearchQuery": "best YouTube search query for the main topic"
 }
 
-Topic: "${sanitizedTopic}"
+Add "tutorial", "explained", or "for beginners" to make searches more educational.`
+      },
+      {
+        role: "user",
+        content: `Topic: "${sanitizedTopic}"
 
-Break this into 3-5 subtasks and provide optimized YouTube search queries for educational videos on each. Add "tutorial", "explained", or "for beginners" to make searches more educational.`
+Break this into 3-5 subtasks and provide optimized YouTube search queries for educational videos on each.`
       }
     ]);
 
-    console.log('AI response:', content);
+    console.log('AI response received');
 
     let parsedData;
     try {

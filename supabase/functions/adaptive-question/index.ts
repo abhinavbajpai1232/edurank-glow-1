@@ -1,22 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Allowed origins for CORS - prevents CSRF attacks
+// Allowed origins for CORS
 const ALLOWED_ORIGINS = [
-  // Production
   'https://edurank.app',
   'https://www.edurank.app',
-  
-  // Development
   'http://localhost:5173',
   'http://localhost:3000',
-  
-  // Fallback
   'https://lovable.dev',
 ];
 
 function getCORSHeaders(originHeader: string | null): Record<string, string> {
-  // Only allow requests from whitelisted origins
   const allowedOrigin = (originHeader && ALLOWED_ORIGINS.includes(originHeader))
     ? originHeader
     : ALLOWED_ORIGINS[0];
@@ -70,23 +64,25 @@ function sanitizeInput(input: string, maxLength: number): { isValid: boolean; sa
   return { isValid: true, sanitized };
 }
 
-// Bytez AI call function (using Gemini-3-pro-preview for adaptive questions)
-async function callBytezAI(messages: { role: string; content: string }[]): Promise<string> {
-  const BYTEZ_API_KEY = Deno.env.get('BYTEZ_API_KEY');
-  if (!BYTEZ_API_KEY) {
-    throw new Error('BYTEZ_API_KEY is not configured');
+// Lovable AI Gateway call
+const LOVABLE_AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+async function callLovableAI(messages: { role: string; content: string }[]): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log('Calling Bytez AI (Gemini-3-pro-preview) for adaptive question generation...');
+  console.log("Calling Lovable AI (gemini-3-flash-preview) for adaptive question...");
   
-  const response = await fetch('https://api.bytez.com/v1/chat/completions', {
-    method: 'POST',
+  const response = await fetch(LOVABLE_AI_GATEWAY, {
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${BYTEZ_API_KEY}`,
-      'Content-Type': 'application/json',
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: 'google/gemini-3-pro-preview',
+      model: "google/gemini-3-flash-preview",
       messages,
       temperature: 0.7,
       max_tokens: 2000,
@@ -94,24 +90,25 @@ async function callBytezAI(messages: { role: string; content: string }[]): Promi
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Bytez AI error:', response.status, errorText);
+    console.error("Lovable AI error:", response.status);
     
     if (response.status === 429) {
-      throw new Error('Rate limit exceeded. Please try again later.');
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    if (response.status === 402) {
+      throw new Error("Payment required. Please add funds to your Lovable AI workspace.");
     }
     if (response.status === 401) {
-      throw new Error('Invalid API key or authentication failed.');
+      throw new Error("Invalid API key or authentication failed.");
     }
-    throw new Error(`Bytez AI error: ${response.status}`);
+    throw new Error(`AI gateway error: ${response.status}`);
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || '';
+  return data.choices?.[0]?.message?.content || "";
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     const corsHeaders = getCORSHeaders(req.headers.get('origin'));
     return new Response(null, { headers: corsHeaders });
@@ -186,7 +183,10 @@ serve(async (req) => {
       }
     }
 
-    const prompt = `You are an adaptive assessment designer. Generate a single follow-up question based on the student's performance.
+    const questionContent = await callLovableAI([
+      {
+        role: "system",
+        content: `You are an adaptive assessment designer. Generate a single follow-up question based on the student's performance.
 
 ${difficultyInstruction}
 
@@ -210,17 +210,19 @@ Respond with ONLY valid JSON, no markdown:
   "options": ["Option A", "Option B", "Option C", "Option D"],
   "correctAnswer": 0,
   "explanation": "Why this answer is correct"
-}
-
-Study Notes:
+}`
+      },
+      {
+        role: "user",
+        content: `Study Notes:
 ${notesValidation.sanitized}
 
 Previous Question: "${previousQuestion}"
 Student answered: ${wasCorrect ? 'CORRECTLY' : 'INCORRECTLY'}
 
-Generate an appropriate follow-up question.`;
-
-    const questionContent = await callBytezAI([{ role: 'user', content: prompt }]);
+Generate an appropriate follow-up question.`
+      }
+    ]);
 
     if (!questionContent) {
       throw new Error("No content generated from AI");

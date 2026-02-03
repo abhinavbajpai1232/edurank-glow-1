@@ -1,22 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Allowed origins for CORS - prevents CSRF attacks
+// Allowed origins for CORS
 const ALLOWED_ORIGINS = [
-  // Production
   'https://edurank.app',
   'https://www.edurank.app',
-  
-  // Development
   'http://localhost:5173',
   'http://localhost:3000',
-  
-  // Fallback
   'https://lovable.dev',
 ];
 
 function getCORSHeaders(originHeader: string | null): Record<string, string> {
-  // Only allow requests from whitelisted origins
   const allowedOrigin = (originHeader && ALLOWED_ORIGINS.includes(originHeader))
     ? originHeader
     : ALLOWED_ORIGINS[0];
@@ -34,23 +28,25 @@ interface TopicInput {
   weaknessScore: number;
 }
 
-// Bytez AI call function (using Gemini-3-pro-preview for weak areas quiz)
-async function callBytezAI(messages: { role: string; content: string }[]): Promise<string> {
-  const BYTEZ_API_KEY = Deno.env.get('BYTEZ_API_KEY');
-  if (!BYTEZ_API_KEY) {
-    throw new Error('BYTEZ_API_KEY is not configured');
+// Lovable AI Gateway call
+const LOVABLE_AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+async function callLovableAI(messages: { role: string; content: string }[]): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log('Calling Bytez AI (Gemini-3-pro-preview) for weak areas quiz...');
+  console.log("Calling Lovable AI (gemini-3-flash-preview) for weak areas quiz...");
   
-  const response = await fetch('https://api.bytez.com/v1/chat/completions', {
-    method: 'POST',
+  const response = await fetch(LOVABLE_AI_GATEWAY, {
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${BYTEZ_API_KEY}`,
-      'Content-Type': 'application/json',
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: 'google/gemini-3-pro-preview',
+      model: "google/gemini-3-flash-preview",
       messages,
       temperature: 0.7,
       max_tokens: 2000,
@@ -58,24 +54,25 @@ async function callBytezAI(messages: { role: string; content: string }[]): Promi
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Bytez AI error:', response.status, errorText);
+    console.error("Lovable AI error:", response.status);
     
     if (response.status === 429) {
-      throw new Error('Rate limit exceeded. Please try again later.');
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    if (response.status === 402) {
+      throw new Error("Payment required. Please add funds to your Lovable AI workspace.");
     }
     if (response.status === 401) {
-      throw new Error('Invalid API key or authentication failed.');
+      throw new Error("Invalid API key or authentication failed.");
     }
-    throw new Error(`Bytez AI error: ${response.status}`);
+    throw new Error(`AI gateway error: ${response.status}`);
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || '';
+  return data.choices?.[0]?.message?.content || "";
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     const corsHeaders = getCORSHeaders(req.headers.get('origin'));
     return new Response(null, { headers: corsHeaders });
@@ -98,7 +95,6 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Validate JWT
     const token = authHeader.replace("Bearer ", "");
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
     
@@ -122,10 +118,8 @@ serve(async (req) => {
     const typedTopics = topics as TopicInput[];
     console.log(`Generating fix-weak-areas quiz for ${typedTopics.length} topics`);
 
-    // Sort topics by weakness score (most weak first)
     const sortedTopics = [...typedTopics].sort((a, b) => b.weaknessScore - a.weaknessScore);
     
-    // Build prompt
     const topicsDescription = sortedTopics
       .map(t => `- ${t.name} (weakness score: ${Math.round(t.weaknessScore)}%)`)
       .join('\n');
@@ -142,7 +136,10 @@ ${notes.substring(0, 6000)}
 
     const totalQuestions = Math.min(sortedTopics.length * questionsPerTopic, 10);
 
-    const prompt = `You are an educational quiz generator specialized in helping students improve their weak areas.
+    const content = await callLovableAI([
+      {
+        role: "system",
+        content: `You are an educational quiz generator specialized in helping students improve their weak areas.
 
 Your task is to generate targeted practice questions that:
 1. Focus on the EXACT concepts the student is weak in
@@ -150,17 +147,7 @@ Your task is to generate targeted practice questions that:
 3. Include clear explanations for each answer
 4. Test understanding, not just memorization
 
-CRITICAL: Generate questions that specifically target the weak concepts listed below.
-
-Generate ${totalQuestions} practice questions targeting these weak topics:
-
-${topicsDescription}
-${contentContext}
-
-For each question:
-1. Clearly connect it to one of the weak topics
-2. Match difficulty to weakness score (higher score = start easier)
-3. Include a helpful explanation
+CRITICAL: Generate questions that specifically target the weak concepts listed.
 
 Return ONLY a valid JSON object in this exact format:
 {
@@ -171,14 +158,25 @@ Return ONLY a valid JSON object in this exact format:
       "question": "Question text here?",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correctAnswer": 0,
-      "explanation": "Why this answer is correct and what the student should remember."
+      "explanation": "Why this answer is correct."
     }
   ]
-}`;
+}`
+      },
+      {
+        role: "user",
+        content: `Generate ${totalQuestions} practice questions targeting these weak topics:
 
-    const content = await callBytezAI([{ role: 'user', content: prompt }]);
+${topicsDescription}
+${contentContext}
 
-    // Parse JSON from response
+For each question:
+1. Clearly connect it to one of the weak topics
+2. Match difficulty to weakness score (higher score = start easier)
+3. Include a helpful explanation`
+      }
+    ]);
+
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       console.error("No JSON found in response:", content);
@@ -188,7 +186,6 @@ Return ONLY a valid JSON object in this exact format:
     const parsed = JSON.parse(jsonMatch[0]);
     const questions = parsed.questions || [];
 
-    // Add topic IDs to questions (match by name)
     const questionsWithIds = questions.map((q: any, index: number) => {
       const matchingTopic = sortedTopics.find(
         t => t.name.toLowerCase() === (q.topicName || "").toLowerCase()

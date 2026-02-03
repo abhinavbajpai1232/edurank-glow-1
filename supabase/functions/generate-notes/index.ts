@@ -3,20 +3,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Allowed origins for CORS - prevents CSRF attacks
 const ALLOWED_ORIGINS = [
-  // Production
   'https://edurank.app',
   'https://www.edurank.app',
-  
-  // Development
   'http://localhost:5173',
   'http://localhost:3000',
-  
-  // Fallback
   'https://lovable.dev',
 ];
 
 function getCORSHeaders(originHeader: string | null): Record<string, string> {
-  // Only allow requests from whitelisted origins
   const allowedOrigin = (originHeader && ALLOWED_ORIGINS.includes(originHeader))
     ? originHeader
     : ALLOWED_ORIGINS[0];
@@ -29,7 +23,7 @@ function getCORSHeaders(originHeader: string | null): Record<string, string> {
   };
 }
 
-// Input validation and sanitization constants
+// Input validation constants
 const MAX_TITLE_LENGTH = 500;
 const MAX_ID_LENGTH = 100;
 const FORBIDDEN_PATTERNS = [
@@ -63,7 +57,7 @@ function sanitizeInput(input: string, maxLength: number): { isValid: boolean; sa
 
   for (const pattern of FORBIDDEN_PATTERNS) {
     if (pattern.test(sanitized)) {
-      console.warn('Potential prompt injection detected:', sanitized.substring(0, 50));
+      console.warn('Potential prompt injection detected');
       return { isValid: false, sanitized: '', error: 'Invalid input detected' };
     }
   }
@@ -101,7 +95,6 @@ async function fetchVideoContext(videoTitle: string, videoId: string): Promise<s
 
   try {
     console.log("Fetching video context using Perplexity...");
-    // Do NOT log the API key or embed it in URLs - use POST with headers instead
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
       headers: {
@@ -113,7 +106,7 @@ async function fetchVideoContext(videoTitle: string, videoId: string): Promise<s
         messages: [
           {
             role: "system",
-            content: "You are a research assistant. Provide comprehensive educational content and key concepts related to the given YouTube video topic. Focus on factual information that would be helpful for study notes."
+            content: "You are a research assistant. Provide comprehensive educational content and key concepts related to the given YouTube video topic."
           },
           {
             role: "user",
@@ -122,12 +115,10 @@ Title: "${videoTitle}"
 YouTube Video ID: ${videoId}
 
 Provide:
-1. Main concepts and definitions related to this topic
+1. Main concepts and definitions
 2. Key facts and important points
-3. Related subtopics and their explanations
-4. Study-worthy information
-
-Focus on educational content that would help a student understand this topic thoroughly.`
+3. Related subtopics
+4. Study-worthy information`
           }
         ],
         max_tokens: 2000,
@@ -135,7 +126,6 @@ Focus on educational content that would help a student understand this topic tho
     });
 
     if (!response.ok) {
-      // Don't log the full response as it might contain sensitive headers
       console.error("Perplexity API error:", response.status);
       return "";
     }
@@ -150,23 +140,25 @@ Focus on educational content that would help a student understand this topic tho
   }
 }
 
-// Bytez AI call function (using GPT-4.1-mini for notes generation)
-async function callBytezAI(messages: { role: string; content: string }[]): Promise<string> {
-  const BYTEZ_API_KEY = Deno.env.get('BYTEZ_API_KEY');
-  if (!BYTEZ_API_KEY) {
-    throw new Error('BYTEZ_API_KEY is not configured');
+// Lovable AI Gateway call
+const LOVABLE_AI_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+async function callLovableAI(messages: { role: string; content: string }[]): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY is not configured");
   }
 
-  console.log('Calling Bytez AI (GPT-4.1-mini) for notes generation...');
+  console.log("Calling Lovable AI (gemini-3-flash-preview) for notes generation...");
   
-  const response = await fetch('https://api.bytez.com/v1/chat/completions', {
-    method: 'POST',
+  const response = await fetch(LOVABLE_AI_GATEWAY, {
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${BYTEZ_API_KEY}`,
-      'Content-Type': 'application/json',
+      "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: 'openai/gpt-4.1-mini',
+      model: "google/gemini-3-flash-preview",
       messages,
       temperature: 0.7,
       max_tokens: 2000,
@@ -174,24 +166,25 @@ async function callBytezAI(messages: { role: string; content: string }[]): Promi
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Bytez AI error:', response.status);
+    console.error("Lovable AI error:", response.status);
     
     if (response.status === 429) {
-      throw new Error('Rate limit exceeded. Please try again later.');
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    if (response.status === 402) {
+      throw new Error("Payment required. Please add funds to your Lovable AI workspace.");
     }
     if (response.status === 401) {
-      throw new Error('Invalid API key or authentication failed.');
+      throw new Error("Invalid API key or authentication failed.");
     }
-    throw new Error(`Bytez AI error: ${response.status}`);
+    throw new Error(`AI gateway error: ${response.status}`);
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || '';
+  return data.choices?.[0]?.message?.content || "";
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     const corsHeaders = getCORSHeaders(req.headers.get('origin'));
     return new Response(null, { headers: corsHeaders });
@@ -265,13 +258,11 @@ serve(async (req) => {
 
     console.log(`Generating notes for video: ${sanitizedTitle} (${videoId})`);
 
-    // Fetch video context using Perplexity
     const videoContext = await fetchVideoContext(sanitizedTitle, videoId);
 
-    // Generate notes using Bytez AI
-    const generatedNotes = await callBytezAI([
+    const generatedNotes = await callLovableAI([
       {
-        role: 'user',
+        role: "system",
         content: `You are an expert educational content creator specializing in generating comprehensive, well-structured study notes. 
 
 Your notes must be:
@@ -284,9 +275,11 @@ Format your response in clear markdown with:
 ## Key Concepts
 ## Important Points  
 ## Summary
-## Study Tips
-
-Generate detailed, comprehensive study notes for an educational video.
+## Study Tips`
+      },
+      {
+        role: "user",
+        content: `Generate detailed, comprehensive study notes for an educational video.
 
 **Video Title:** "${sanitizedTitle}"
 **Video ID:** ${videoId}
@@ -310,9 +303,8 @@ Make the notes comprehensive and educational.`
       throw new Error("No content generated from AI");
     }
 
-    console.log("Notes generated successfully using Bytez AI");
+    console.log("Notes generated successfully using Lovable AI");
 
-    // Check achievements after generating notes
     await serviceClient.rpc('check_achievements', { uid: user.id });
 
     const { data: savedNote, error: saveError } = await supabaseClient
