@@ -109,6 +109,33 @@ export type Database = {
         }
         Relationships: []
       }
+      call_signals: {
+        Row: {
+          callee_id: string
+          caller_id: string
+          created_at: string
+          id: string
+          signal_data: Json
+          signal_type: string
+        }
+        Insert: {
+          callee_id: string
+          caller_id: string
+          created_at?: string
+          id?: string
+          signal_data?: Json
+          signal_type: string
+        }
+        Update: {
+          callee_id?: string
+          caller_id?: string
+          created_at?: string
+          id?: string
+          signal_data?: Json
+          signal_type?: string
+        }
+        Relationships: []
+      }
       daily_challenges: {
         Row: {
           base_xp_reward: number
@@ -145,6 +172,63 @@ export type Database = {
           is_active?: boolean
           target_value?: number
           title?: string
+        }
+        Relationships: []
+      }
+      friend_invite_codes: {
+        Row: {
+          code: string
+          created_at: string
+          expires_at: string
+          id: string
+          is_used: boolean
+          used_by: string | null
+          user_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          is_used?: boolean
+          used_by?: string | null
+          user_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          is_used?: boolean
+          used_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      friendships: {
+        Row: {
+          created_at: string
+          friend_id: string
+          id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          friend_id: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          friend_id?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -231,6 +315,39 @@ export type Database = {
           total_quizzes?: number
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          message_type: string
+          receiver_id: string
+          sender_id: string
+          shared_content: Json | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message_type?: string
+          receiver_id: string
+          sender_id: string
+          shared_content?: Json | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message_type?: string
+          receiver_id?: string
+          sender_id?: string
+          shared_content?: Json | null
         }
         Relationships: []
       }
