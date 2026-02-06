@@ -19,6 +19,7 @@ import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 import FixWeakAreas from "./pages/FixWeakAreas";
 import Analysis from "./pages/Analysis";
+import Friends from "./pages/Friends";
 
 const queryClient = new QueryClient();
 
@@ -111,6 +112,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Analysis />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/friends"
+              element={
+                <ProtectedRoute>
+                  <Friends />
                 </ProtectedRoute>
               }
             />

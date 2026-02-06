@@ -15,6 +15,7 @@ import {
   Trash2,
   Search,
   User,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ import { WeeklyGoalsWidget } from '@/components/dashboard/WeeklyGoalsWidget';
 import { StudyRemindersCard } from '@/components/dashboard/StudyRemindersCard';
 import { DailyChallengesCard } from '@/components/dashboard/DailyChallengesCard';
 import { StreakFreezeCard } from '@/components/dashboard/StreakFreezeCard';
+import FriendsWidget from '@/components/friends/FriendsWidget';
 
 interface Todo {
   id: string;
@@ -299,6 +301,9 @@ const Dashboard = () => {
             <Button variant="ghost" size="icon" onClick={() => navigate('/analysis')} title="Your Analysis">
               <TrendingUp className="h-5 w-5" />
             </Button>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/friends')} title="Friends">
+              <Users className="h-5 w-5" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => navigate('/leaderboard')} title="Leaderboard">
               <Trophy className="h-5 w-5" />
             </Button>
@@ -346,11 +351,12 @@ const Dashboard = () => {
         {/* Daily Challenges */}
         <DailyChallengesCard />
 
-        {/* Weekly Goals Widget + Study Reminders + Streak Freeze */}
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
+        {/* Weekly Goals Widget + Study Reminders + Streak Freeze + Friends */}
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
           <WeeklyGoalsWidget />
           <StreakFreezeCard />
           <StudyRemindersCard />
+          <FriendsWidget />
         </section>
 
         {/* Weak Topic Recommendations */}
