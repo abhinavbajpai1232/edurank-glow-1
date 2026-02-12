@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Play, Clock, Eye, User, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useCoins } from '@/contexts/CoinContext';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -79,6 +80,12 @@ const SubtasksSidebar = ({ subtasks, onVideoSelect, currentVideoId, mainVideo }:
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
+          </div>
+
+          {/* Games quick access */}
+          <div className="p-3 border-b border-border/30">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">🎮 Games</h3>
+            <GamesQuickAccess />
           </div>
 
           {/* Subtasks list */}
@@ -208,3 +215,44 @@ const VideoCard = ({ video, isActive, onSelect }: VideoCardProps) => {
 };
 
 export default SubtasksSidebar;
+
+const GamesQuickAccess = () => {
+  const { coins, isUnlocked, unlockGame } = useCoins();
+  const games = [
+    { id: 'epic-era-battles', title: 'Epic Era Battles', price: 100 },
+    { id: 'rushlane-x', title: 'Rushlane X', price: 300 },
+  ];
+
+  return (
+    <div className="space-y-2">
+      {games.map(g => (
+        <div key={g.id} className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">{g.title}</div>
+            <div className="text-xs text-muted-foreground">{g.price} coins</div>
+          </div>
+          <div>
+            {isUnlocked(g.id) ? (
+              <div className="text-success text-sm">Unlocked</div>
+            ) : (
+              <button
+                className="text-sm text-primary"
+                onClick={async () => {
+                  if (coins < g.price) {
+                    alert(`You need ${g.price - coins} more coins to unlock ${g.title}`);
+                    return;
+                  }
+                  if (confirm(`Spend ${g.price} coins to unlock ${g.title}?`)) {
+                    await unlockGame(g.id, g.price);
+                  }
+                }}
+              >
+                Unlock
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};

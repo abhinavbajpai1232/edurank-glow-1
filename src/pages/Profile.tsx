@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import AchievementsPanel from '@/components/achievements/AchievementsPanel';
 import ImprovementChart from '@/components/ImprovementChart';
+import { useCoins } from '@/contexts/CoinContext';
 
 interface UserCredits {
   credits_remaining: number;
@@ -31,6 +32,8 @@ const Profile = () => {
 
   const displayName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Student';
   const email = user?.email || '';
+
+  const { coins } = useCoins();
 
   useEffect(() => {
     if (user) {
@@ -165,6 +168,12 @@ const Profile = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <Logo size="sm" />
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-primary/5 px-3 py-1 rounded-md">
+              <div className="text-yellow-400 font-bold">🪙</div>
+              <div className="text-sm font-semibold">{coins}</div>
+            </div>
           </div>
         </div>
       </header>

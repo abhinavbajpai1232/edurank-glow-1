@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { FilterProvider } from "@/contexts/FilterContext";
+import { CoinProvider } from "@/contexts/CoinContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -20,6 +21,8 @@ import NotFound from "./pages/NotFound";
 import FixWeakAreas from "./pages/FixWeakAreas";
 import Analysis from "./pages/Analysis";
 import Friends from "./pages/Friends";
+import Games from "./pages/Games";
+import GamePlayer from "./pages/GamePlayer";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +42,7 @@ const App = () => (
               },
             }}
           />
+          <CoinProvider>
           <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
@@ -116,6 +120,22 @@ const App = () => (
               }
             />
             <Route
+              path="/games"
+              element={
+                <ProtectedRoute>
+                  <Games />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/games/:gameId"
+              element={
+                <ProtectedRoute>
+                  <GamePlayer />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/friends"
               element={
                 <ProtectedRoute>
@@ -127,6 +147,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+        </CoinProvider>
         </TooltipProvider>
       </FilterProvider>
     </AuthProvider>

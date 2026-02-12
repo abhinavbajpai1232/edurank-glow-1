@@ -23,6 +23,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCoins } from '@/contexts/CoinContext';
 
 interface Question {
   id: number;
@@ -45,6 +46,7 @@ const Quiz = () => {
   const { quizId } = useParams();
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { addCoins } = useCoins();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -253,6 +255,13 @@ const Quiz = () => {
         total_questions: questions.length,
         answers: answers,
       });
+
+        // Award coins for correct answers (10 coins per correct answer)
+        try {
+          await addCoins(score * 10);
+        } catch (err) {
+          console.error('Error awarding coins:', err);
+        }
 
       // Analyze weakness after saving results
       if (videoId && savedQuizId) {

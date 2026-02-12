@@ -29,6 +29,7 @@ import WeakTopicCards from '@/components/WeakTopicCards';
 import XpLevelBar from '@/components/header/XpLevelBar';
 import StreakDisplay from '@/components/header/StreakDisplay';
 import StreakProtectionModal from '@/components/header/StreakProtectionModal';
+import { useCoins } from '@/contexts/CoinContext';
 import { useUserStats } from '@/hooks/useUserStats';
 import { WeeklyGoalsWidget } from '@/components/dashboard/WeeklyGoalsWidget';
 import { StudyRemindersCard } from '@/components/dashboard/StudyRemindersCard';
@@ -62,6 +63,8 @@ const Dashboard = () => {
   const progress = todos.length > 0 ? (completedCount / todos.length) * 100 : 0;
 
   const displayName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'Student';
+
+  const { coins } = useCoins();
 
   useEffect(() => {
     if (user) {
@@ -298,6 +301,10 @@ const Dashboard = () => {
             <span className="text-sm text-muted-foreground hidden lg:block">
               Hi, {displayName}!
             </span>
+            <div className="flex items-center gap-2 bg-primary/5 px-3 py-1 rounded-md">
+              <div className="text-yellow-400 font-bold">🪙</div>
+              <div className="text-sm font-semibold">{coins}</div>
+            </div>
             <Button variant="ghost" size="icon" onClick={() => navigate('/analysis')} title="Your Analysis">
               <TrendingUp className="h-5 w-5" />
             </Button>
@@ -361,6 +368,19 @@ const Dashboard = () => {
 
         {/* Weak Topic Recommendations */}
         <WeakTopicCards />
+
+        {/* Games Section */}
+        <section className="glass-card rounded-2xl p-6 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">🎮 Games</h2>
+              <p className="text-sm text-muted-foreground">Play games using coins you earn from quizzes.</p>
+            </div>
+            <div>
+              <Button onClick={() => navigate('/games')}>Open Games</Button>
+            </div>
+          </div>
+        </section>
 
         {/* Todo List */}
         <section className="space-y-4 animate-slide-up">
