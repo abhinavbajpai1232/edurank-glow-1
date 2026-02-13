@@ -33,13 +33,14 @@ const About = () => {
             <div className="p-2 rounded-lg bg-primary/10">
               <Sparkles className="h-5 w-5 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold">About EduRank</h1>
+            <h1 className="text-2xl font-bold">About BrainBuddy</h1>
           </div>
 
           <p className="text-muted-foreground leading-relaxed">
-            EduRank is an AI-powered study platform that transforms your learning experience. 
-            We use advanced AI to find the best educational videos for your topics, generate 
-            comprehensive notes, and create interactive quizzes to test your knowledge.
+            BrainBuddy is your AI friend for learning and problem solving. We provide 
+            instant help with any doubt, generate comprehensive study notes, and create 
+            interactive quizzes to help you master your subjects. Our AI buddy is here 
+            to support your learning journey every step of the way.
           </p>
         </section>
 

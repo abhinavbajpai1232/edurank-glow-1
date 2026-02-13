@@ -4,7 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* EduRank Design System - Dark Neon Blue-Green Theme */
+/* BrainBuddy Design System - Dark Neon Blue-Purple Theme */
 
 @layer base {
   :root {
@@ -17,16 +17,16 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 20% 10%;
 
-    --primary: 160 84% 39%;
+    --primary: 217 91% 53%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 200 80% 50%;
+    --secondary: 263 70% 58%;
     --secondary-foreground: 0 0% 100%;
 
     --muted: 220 15% 92%;
     --muted-foreground: 220 10% 40%;
 
-    --accent: 160 60% 45%;
+    --accent: 330 81% 60%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
@@ -37,83 +37,83 @@
 
     --border: 220 15% 88%;
     --input: 220 15% 88%;
-    --ring: 160 84% 39%;
+    --ring: 217 91% 53%;
 
     --radius: 0.75rem;
 
-    --neon-glow: 0 0 20px hsl(160 84% 39% / 0.4);
-    --neon-glow-strong: 0 0 30px hsl(160 84% 39% / 0.6);
+    --neon-glow: 0 0 20px hsl(217 91% 53% / 0.4);
+    --neon-glow-strong: 0 0 30px hsl(217 91% 53% / 0.6);
 
     --sidebar-background: 220 20% 97%;
     --sidebar-foreground: 220 20% 10%;
-    --sidebar-primary: 160 84% 39%;
+    --sidebar-primary: 217 91% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 160 60% 45%;
+    --sidebar-accent: 330 81% 60%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 220 15% 88%;
-    --sidebar-ring: 160 84% 39%;
+    --sidebar-ring: 217 91% 53%;
 
-    --chart-1: 160 84% 39%;
-    --chart-2: 200 80% 50%;
-    --chart-3: 180 70% 45%;
+    --chart-1: 217 91% 53%;
+    --chart-2: 263 70% 58%;
+    --chart-3: 330 81% 60%;
     --chart-4: 142 76% 36%;
     --chart-5: 220 60% 50%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(160 84% 39%), hsl(200 80% 50%));
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 53%), hsl(263 70% 58%));
     --gradient-card: linear-gradient(180deg, hsl(220 20% 18%), hsl(220 25% 12%));
   }
 
   .dark {
-    --background: 220 25% 8%;
+    --background: 225 40% 5%;
     --foreground: 210 20% 98%;
 
-    --card: 220 20% 12%;
+    --card: 222 30% 10%;
     --card-foreground: 210 20% 98%;
 
-    --popover: 220 20% 12%;
+    --popover: 222 30% 10%;
     --popover-foreground: 210 20% 98%;
 
-    --primary: 160 84% 45%;
-    --primary-foreground: 220 25% 8%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 225 40% 5%;
 
-    --secondary: 200 80% 55%;
-    --secondary-foreground: 220 25% 8%;
+    --secondary: 263 70% 65%;
+    --secondary-foreground: 225 40% 5%;
 
     --muted: 220 20% 18%;
-    --muted-foreground: 220 15% 60%;
+    --muted-foreground: 218 11% 65%;
 
-    --accent: 160 70% 50%;
-    --accent-foreground: 220 25% 8%;
+    --accent: 330 81% 65%;
+    --accent-foreground: 225 40% 5%;
 
     --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
     --success: 142 76% 45%;
-    --success-foreground: 220 25% 8%;
+    --success-foreground: 225 40% 5%;
 
     --border: 220 20% 20%;
     --input: 220 20% 18%;
-    --ring: 160 84% 45%;
+    --ring: 217 91% 60%;
 
-    --neon-glow: 0 0 20px hsl(160 84% 45% / 0.5);
-    --neon-glow-strong: 0 0 40px hsl(160 84% 45% / 0.7);
+    --neon-glow: 0 0 20px hsl(217 91% 60% / 0.5);
+    --neon-glow-strong: 0 0 40px hsl(217 91% 60% / 0.7);
 
-    --sidebar-background: 220 25% 6%;
+    --sidebar-background: 225 40% 4%;
     --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 160 84% 45%;
-    --sidebar-primary-foreground: 220 25% 8%;
-    --sidebar-accent: 160 70% 50%;
-    --sidebar-accent-foreground: 220 25% 8%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 225 40% 5%;
+    --sidebar-accent: 330 81% 65%;
+    --sidebar-accent-foreground: 225 40% 5%;
     --sidebar-border: 220 20% 20%;
-    --sidebar-ring: 160 84% 45%;
+    --sidebar-ring: 217 91% 60%;
 
-    --chart-1: 160 84% 45%;
-    --chart-2: 200 80% 55%;
-    --chart-3: 180 70% 50%;
+    --chart-1: 217 91% 60%;
+    --chart-2: 263 70% 65%;
+    --chart-3: 330 81% 65%;
     --chart-4: 142 76% 45%;
     --chart-5: 220 60% 55%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(160 84% 45%), hsl(200 80% 55%));
+    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(263 70% 65%));
     --gradient-card: linear-gradient(180deg, hsl(220 20% 14%), hsl(220 25% 10%));
   }
 }

@@ -325,7 +325,7 @@ const Profile = () => {
             className="w-full justify-start"
             onClick={() => navigate('/about')}
           >
-            About EduRank
+            About BrainBuddy
           </Button>
         </section>
       </main>

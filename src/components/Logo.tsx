@@ -1,4 +1,4 @@
-import { TrendingUp, FileText, Sparkles } from 'lucide-react';
+import { Brain, Sparkles } from 'lucide-react';
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -24,21 +24,16 @@ const Logo = ({ size = 'md', showText = true }: LogoProps) => {
         {/* Background circle */}
         <div className="absolute inset-0 rounded-full bg-muted/50" />
         
-        {/* Document icon */}
-        <FileText className="absolute h-1/2 w-1/2 text-muted-foreground/70 -translate-x-1" />
-        
-        {/* Rising arrow with gradient effect */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <TrendingUp className="h-3/5 w-3/5 text-primary translate-x-1 translate-y-[-2px]" />
-        </div>
+        {/* Brain icon */}
+        <Brain className="absolute h-1/2 w-1/2 text-primary translate-x-[-2px]" />
         
         {/* Sparkles */}
-        <Sparkles className="absolute top-0 right-0 h-1/4 w-1/4 text-primary animate-pulse" />
+        <Sparkles className="absolute top-0 right-0 h-1/4 w-1/4 text-secondary animate-pulse" />
       </div>
 
       {showText && (
         <span className={`font-display font-bold ${textSizes[size]} neon-text`}>
-          EduRank
+          BrainBuddy
         </span>
       )}
     </div>
