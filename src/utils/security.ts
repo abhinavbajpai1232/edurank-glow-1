@@ -86,7 +86,7 @@ const setupErrorTracking = () => {
 export const validateEnvironment = () => {
   const requiredEnvVars = [
     'VITE_SUPABASE_URL',
-    'VITE_SUPABASE_PUBLISHABLE_KEY',
+    'VITE_SUPABASE_ANON_KEY',
   ];
 
   const missing = requiredEnvVars.filter(
@@ -98,7 +98,9 @@ export const validateEnvironment = () => {
       'Missing required environment variables:',
       missing.join(', ')
     );
-    // Don't throw - allow app to load but with reduced functionality
+    throw new Error(
+      `Missing critical environment variables: ${missing.join(', ')}`
+    );
   }
 
   // Warn if running with unencrypted HTTP (except localhost)
