@@ -8,6 +8,8 @@ import { Separator } from '@/components/ui/separator';
 import Logo from '@/components/Logo';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { sanitizeInput, validateEmail, validatePassword, logError } from '@/utils/errorHandler';
+import { loginLimiter, formSubmitLimiter } from '@/utils/security';
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -42,17 +44,17 @@ const Auth = () => {
         const { data, error } = await supabase
           .from('profiles')
           .select('id')
-          .eq('name', username.trim())
+          .eq('name', sanitizeInput(username.trim()))
           .maybeSingle();
 
         if (error) {
-          console.error('Error checking username:', error);
+          logError(error, 'username_check');
           setIsUsernameAvailable(null);
         } else {
           setIsUsernameAvailable(data === null);
         }
       } catch (error) {
-        console.error('Error checking username:', error);
+        logError(error, 'username_check');
         setIsUsernameAvailable(null);
       } finally {
         setIsCheckingUsername(false);
@@ -64,35 +66,75 @@ const Auth = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Rate limiting
+    if (!formSubmitLimiter.isAllowed('auth_submit')) {
+      toast.error('Too many attempts. Please wait before trying again.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
+      // Input validation
+      if (!validateEmail(email)) {
+        toast.error('Please enter a valid email');
+        setIsLoading(false);
+        return;
+      }
+
       if (isLogin) {
+        // Check rate limit for login attempts
+        if (!loginLimiter.isAllowed(email)) {
+          const remaining = loginLimiter.getRemainingAttempts(email);
+          toast.error(`Too many login attempts. Please try again in 1 minute.`);
+          setIsLoading(false);
+          return;
+        }
+
         const { error } = await login(email, password);
         if (error) {
+          logError(new Error(error), 'login_attempt', { email: email.split('@')[0] });
           toast.error(error);
         } else {
+          loginLimiter.reset(email);
           toast.success('Welcome back!');
           navigate('/dashboard');
         }
       } else {
+        // Signup validation
         if (!name.trim()) {
           toast.error('Please enter your name');
           setIsLoading(false);
           return;
         }
+
         if (!username.trim()) {
           toast.error('Please enter a username');
           setIsLoading(false);
           return;
         }
+
+        // Sanitize inputs
+        const sanitizedName = sanitizeInput(name);
+        const sanitizedUsername = sanitizeInput(username.trim());
+
         if (isUsernameAvailable === false) {
           toast.error('This username is already taken');
           setIsLoading(false);
           return;
         }
-        const { error } = await signup(email, password, name, username.trim());
+
+        const validation = validatePassword(password);
+        if (!validation.valid) {
+          toast.error('Password: ' + validation.errors[0]);
+          setIsLoading(false);
+          return;
+        }
+
+        const { error } = await signup(email, password, sanitizedName, sanitizedUsername);
         if (error) {
+          logError(new Error(error), 'signup_attempt', { email: email.split('@')[0] });
           if (error.includes('profiles_name_unique') || error.includes('duplicate key')) {
             toast.error('This username is already taken. Please choose another.');
           } else {
@@ -104,6 +146,7 @@ const Auth = () => {
         }
       }
     } catch (error) {
+      logError(error, 'auth_submit');
       toast.error('Something went wrong');
     } finally {
       setIsLoading(false);

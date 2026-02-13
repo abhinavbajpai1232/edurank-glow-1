@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
+import { logError } from '@/utils/errorHandler';
 
 const ForgotPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ const ForgotPassword: React.FC = () => {
       if (resetError) {
         // Generic message to prevent email enumeration
         console.error('Reset error:', resetError);
+        logError(resetError, 'forgot_password_reset');
       }
 
       // Show success message regardless (security best practice)
@@ -42,6 +44,7 @@ const ForgotPassword: React.FC = () => {
       toast.success('Password reset link sent if account exists');
     } catch (err: unknown) {
       console.error('Error:', err);
+      logError(err, 'forgot_password');
       const errorMessage = err instanceof Error ? err.message : 'An error occurred. Please try again.';
       setError(errorMessage);
     } finally {

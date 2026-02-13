@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { logError } from '@/utils/errorHandler';
 
 interface Profile {
   id: string;
@@ -106,13 +107,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       if (error) {
-        console.error('Login error:', error);
+        logError(error, 'login');
         return { error: error.message };
       }
 
       return {};
     } catch (error) {
-      console.error('Login error:', error);
+      logError(error, 'login');
       return { error: 'Login failed. Please try again.' };
     }
   };
@@ -134,7 +135,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       if (error) {
-        console.error('Signup error:', error);
+        logError(error, 'signup');
         if (error.message.includes('already registered')) {
           return { error: 'This email is already registered. Please sign in instead.' };
         }
@@ -149,14 +150,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           .eq('user_id', data.user.id);
 
         if (profileError) {
-          console.error('Profile update error:', profileError);
+          logError(profileError, 'profile_update');
           // Don't fail signup if profile update fails, but log it
         }
       }
 
       return {};
     } catch (error) {
-      console.error('Signup error:', error);
+      logError(error, 'signup');
       return { error: 'Signup failed. Please try again.' };
     }
   };
@@ -171,13 +172,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       if (error) {
-        console.error('Google login error:', error);
+        logError(error, 'google_login');
         return { error: error.message };
       }
 
       return {};
     } catch (error) {
-      console.error('Google login error:', error);
+      logError(error, 'google_login');
       return { error: 'Google login failed. Please try again.' };
     }
   };
@@ -185,7 +186,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
-      console.error('Logout error:', error);
+      logError(error, 'logout');
     }
     setUser(null);
     setSession(null);

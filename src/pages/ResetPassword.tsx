@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
 import { passwordValidator, PasswordStrength } from '@/utils/passwordValidator';
+import { logError } from '@/utils/errorHandler';
 
 const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -87,7 +88,7 @@ const ResetPassword: React.FC = () => {
         navigate('/auth');
       }, 2000);
     } catch (err: unknown) {
-      console.error('Error updating password:', err);
+      logError(err, 'update_password');
       const errorMessage = err instanceof Error ? err.message : 'Failed to update password. Please try again.';
       setError(errorMessage);
     } finally {

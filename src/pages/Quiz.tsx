@@ -24,6 +24,7 @@ import Logo from '@/components/Logo';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCoins } from '@/contexts/CoinContext';
+import { logError } from '@/utils/errorHandler';
 
 interface Question {
   id: number;
@@ -134,6 +135,7 @@ const Quiz = () => {
       setQuestionStartTime(Date.now());
     } catch (error: any) {
       console.error('Error fetching quiz:', error);
+      logError(error, 'fetch_quiz');
       
       if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
         toast.error('Rate limit exceeded. Please try again later.');
@@ -207,6 +209,7 @@ const Quiz = () => {
       return data.question as Question;
     } catch (error) {
       console.error('Error generating adaptive question:', error);
+      logError(error, 'generate_adaptive_question');
       return null;
     } finally {
       setGeneratingAdaptive(false);
@@ -261,6 +264,7 @@ const Quiz = () => {
           await addCoins(score * 10);
         } catch (err) {
           console.error('Error awarding coins:', err);
+          logError(err, 'award_coins');
         }
 
       // Analyze weakness after saving results
@@ -284,6 +288,7 @@ const Quiz = () => {
 
           if (error) {
             console.error('Weakness analysis error:', error);
+            logError(error, 'analyze_weakness');
           } else if (data?.weakTopics?.length > 0) {
             toast.info(`Found ${data.weakTopics.length} topic(s) to improve`, {
               icon: <AlertCircle className="h-4 w-4 text-primary" />,
@@ -291,10 +296,12 @@ const Quiz = () => {
           }
         } catch (analysisError) {
           console.error('Weakness analysis failed:', analysisError);
+          logError(analysisError, 'analyze_weakness');
         }
       }
     } catch (error) {
       console.error('Error saving results:', error);
+      logError(error, 'save_quiz_results');
     }
   };
 

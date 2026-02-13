@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { FilterProvider } from "@/contexts/FilterContext";
 import { CoinProvider } from "@/contexts/CoinContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -29,27 +30,33 @@ import VideoSearch from "./pages/VideoSearch";
 import CodingLab from "./pages/CodingLab";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import Audit from "./pages/Audit";
+import { initSecurityHeaders } from "@/utils/security";
+
+// Initialize security headers on app load
+initSecurityHeaders();
 
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <FilterProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner 
-            position="top-center"
-            toastOptions={{
-              classNames: {
-                toast: 'glass-card border-border',
-                title: 'text-foreground',
-                description: 'text-muted-foreground',
-              },
-            }}
-          />
-          <CoinProvider>
-          <BrowserRouter>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <FilterProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner 
+              position="top-center"
+              toastOptions={{
+                classNames: {
+                  toast: 'glass-card border-border',
+                  title: 'text-foreground',
+                  description: 'text-muted-foreground',
+                },
+              }}
+            />
+            <CoinProvider>
+            <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
@@ -184,6 +191,7 @@ const App = () => (
               }
             />
             <Route path="/about" element={<About />} />
+            <Route path="/audit" element={<Audit />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
@@ -192,6 +200,7 @@ const App = () => (
       </FilterProvider>
     </AuthProvider>
   </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

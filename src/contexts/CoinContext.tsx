@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { logError } from '@/utils/errorHandler';
 import { toast } from 'sonner';
 
 type CoinContextType = {
@@ -52,7 +53,7 @@ export const CoinProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             return;
           }
         } catch (err) {
-          console.error('Error loading coin profile:', err);
+          logError(err, 'load_coin_profile');
         }
       }
 
@@ -85,10 +86,10 @@ export const CoinProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           .eq('user_id', user.id);
 
         if (error) {
-          console.error('Error updating coins in profile:', error);
+          logError(error, 'update_coins');
         }
       } catch (err) {
-        console.error('Error updating coins:', err);
+        logError(err, 'update_coins');
       }
     }
   };
