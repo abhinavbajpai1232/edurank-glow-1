@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import YouTube, { YouTubeEvent, YouTubePlayer } from 'react-youtube';
 import {
@@ -150,7 +150,7 @@ const VideoPlayer = () => {
     }
   };
 
-  const saveProgress = async (currentProgress: number) => {
+  const saveProgress = useCallback(async (currentProgress: number) => {
     if (!user || !todoId || !todo?.video_id) return;
     
     // Only save if progress changed significantly (every 5%)
@@ -174,7 +174,7 @@ const VideoPlayer = () => {
     } catch (error) {
       console.error('Error saving progress:', error);
     }
-  };
+  }, [user, todoId, todo?.video_id, lastSavedProgress]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -197,7 +197,7 @@ const VideoPlayer = () => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [player, showNotesButton, todo, lastSavedProgress, saveProgress]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [player, showNotesButton, todo, saveProgress]);
 
   const onReady = (event: YouTubeEvent) => {
     setPlayer(event.target);
