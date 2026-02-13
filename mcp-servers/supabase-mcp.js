@@ -17,8 +17,12 @@
  * - list_tables: List all tables in public schema
  */
 
+import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import readline from 'readline';
+
+// Load environment variables from .env
+dotenv.config();
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
