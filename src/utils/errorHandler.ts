@@ -29,6 +29,15 @@ export const sanitizeError = (error: unknown): SanitizedError => {
         userMessage: 'Invalid email or password. Please try again.'
       };
     }
+    // Supabase API key errors
+    if (message.includes('invalid api key') || message.includes('invalid api')) {
+      return {
+        message: 'Invalid Supabase API key',
+        code: 'INVALID_API_KEY',
+        userMessage:
+          'Developer: Supabase anon key is invalid. Update VITE_SUPABASE_ANON_KEY in your .env and restart the dev server.'
+      };
+    }
     
     if (message.includes('user already registered') || message.includes('duplicate')) {
       return {
