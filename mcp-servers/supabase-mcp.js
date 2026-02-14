@@ -20,6 +20,8 @@
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import readline from 'readline';
+import fs from 'fs';
+import path from 'path';
 
 // Load environment variables from .env
 dotenv.config();
@@ -35,6 +37,46 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Load local servers config if present
+let LOCAL_SERVERS = {};
+try {
+  const cfgPath = path.resolve(process.cwd(), 'mcp-servers', 'servers.json');
+  if (fs.existsSync(cfgPath)) {
+    const raw = fs.readFileSync(cfgPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    LOCAL_SERVERS = parsed.servers || {};
+    console.error('[MCP] Loaded local servers config from mcp-servers/servers.json');
+  }
+} catch (err) {
+  console.error('[MCP] Failed to load local servers config:', err.message);
+}
+
+async function listConfiguredServers() {
+  const result = {};
+
+  // Start with local file entries
+  for (const [k, v] of Object.entries(LOCAL_SERVERS)) {
+    result[k] = v;
+  }
+
+  // Merge entries from DB if table exists
+  try {
+    const { data, error } = await supabase
+      .from('mcp_servers')
+      .select('name,type,url,metadata');
+
+    if (!error && Array.isArray(data)) {
+      data.forEach((row) => {
+        result[row.name] = { type: row.type, url: row.url, metadata: row.metadata };
+      });
+    }
+  } catch (err) {
+    // ignore DB errors (table might not exist yet)
+  }
+
+  return result;
+}
+
 /**
  * MCP Protocol Message Handler
  */
@@ -47,6 +89,7 @@ const rl = readline.createInterface({
 // MCP initialization
 console.error('[MCP] Supabase MCP Server Starting...');
 console.error(`[MCP] Connected to: ${supabaseUrl}`);
+listConfiguredServers().then((s) => console.error('[MCP] Configured servers:', Object.keys(s)));
 
 // Tool definitions as per MCP spec
 const TOOLS = {
