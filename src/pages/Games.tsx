@@ -29,8 +29,25 @@ const Games: React.FC = () => {
 
   const handlePlay = async (game: any) => {
     if (game.isExternal) {
-      // For external games, deduct credits and open in new tab
-      window.open(game.url, '_blank');
+      // For external games, call server to consume credits then open in new tab
+      try {
+        const session = await (await import('@/integrations/supabase/client')).supabase.auth.getSession();
+        const token = (session as any)?.data?.session?.access_token;
+        const resp = await fetch('/api/consume-credits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ amount: game.credits }),
+        });
+        const json = await resp.json();
+        if (json?.success) {
+          window.open(game.url, '_blank');
+        } else {
+          alert(json?.error || 'Not enough credits');
+        }
+      } catch (err) {
+        console.error('Error consuming credits:', err);
+        alert('Failed to consume credits');
+      }
       return;
     }
     

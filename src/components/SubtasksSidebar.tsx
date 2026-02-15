@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Play, Clock, Eye, User, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCoins } from '@/contexts/CoinContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -233,13 +234,42 @@ const GamesQuickAccess = () => {
           </div>
           <div>
             {g.isExternal ? (
-              <button
-                className="text-sm text-primary"
-                onClick={() => window.open(g.url, '_blank')}
-              >
-                Play
-              </button>
-            ) : isUnlocked(g.id) ? (
+                <button
+                  className="text-sm text-primary"
+                  onClick={async () => {
+                    try {
+                      // quick client-side check
+                      if (coins < g.credits) {
+                        alert(`You need ${g.credits - coins} more credits to play ${g.title}`);
+                        return;
+                      }
+                      const session = await supabase.auth.getSession();
+                      const token = (session as any)?.data?.session?.access_token;
+                      if (!token) {
+                        alert('You must be signed in to use credits');
+                        return;
+                      }
+                      const resp = await fetch('/api/consume-credits', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ amount: g.credits }),
+                      });
+                      const json = await resp.json();
+                      if (!json?.success) {
+                        alert(json?.error || 'Failed to consume credits');
+                        return;
+                      }
+                      // open external URL on success
+                      window.open(g.url, '_blank');
+                    } catch (err) {
+                      console.error(err);
+                      alert('Error consuming credits');
+                    }
+                  }}
+                >
+                  Play
+                </button>
+              ) : isUnlocked(g.id) ? (
               <div className="text-success text-sm">Unlocked</div>
             ) : (
               <button

@@ -136,6 +136,10 @@ app.post('/api/unlock-game', apiLimiter, strictLimiter, authMiddleware, unlockGa
 app.get('/api/user/coins', apiLimiter, authMiddleware, getUserCoins);
 app.get('/api/game/:gameId/status', apiLimiter, authMiddleware, getGameUnlockStatus);
 
+// Credit endpoints (weekly credits system)
+app.post('/api/consume-credits', apiLimiter, strictLimiter, authMiddleware, consumeCredits);
+app.get('/api/user/credits', apiLimiter, authMiddleware, getUserCredits);
+
 // Credit-based system routes (new)
 app.post('/api/consume-credits', apiLimiter, strictLimiter, authMiddleware, consumeCredits);
 app.get('/api/user/credits', apiLimiter, authMiddleware, getUserCredits);

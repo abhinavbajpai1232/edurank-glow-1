@@ -37,21 +37,28 @@ export const CoinProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Try to load from backend if user is present
       if (user) {
         try {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('coins, unlocked_games')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-          if (!error && data) {
-            setCoins(data.coins ?? 0);
-            setUnlockedGames(data.unlocked_games ?? []);
-            // also mirror to localStorage for offline fallback
-            try { localStorage.setItem(LOCAL_KEY, String(data.coins ?? 0)); } catch {}
-            try { localStorage.setItem(LOCAL_UNLOCK_KEY, JSON.stringify(data.unlocked_games ?? [])); } catch {}
-            setLoading(false);
-            return;
+          // Fetch coins from secure server endpoint
+          const session = await supabase.auth.getSession();
+          const token = (session as any)?.data?.session?.access_token;
+          if (token) {
+            const resp = await fetch('/api/user/coins', {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const json = await resp.json();
+            if (json?.success) {
+              setCoins(json.coins ?? 0);
+            }
           }
+          // Load unlocked games from profiles as fallback
+          try {
+            const { data: pdata, error: perror } = await supabase.from('profiles').select('unlocked_games').eq('user_id', user.id).maybeSingle();
+            if (!perror && pdata) setUnlockedGames(pdata.unlocked_games ?? []);
+          } catch (e) {}
+          // mirror to localStorage for offline fallback
+          try { localStorage.setItem(LOCAL_KEY, String(coins ?? 0)); } catch {}
+          try { localStorage.setItem(LOCAL_UNLOCK_KEY, JSON.stringify(unlockedGames ?? [])); } catch {}
+          setLoading(false);
+          return;
         } catch (err) {
           logError(err, 'load_coin_profile');
         }
@@ -78,20 +85,7 @@ export const CoinProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try { localStorage.setItem(LOCAL_KEY, String(newCoins)); } catch {}
     try { localStorage.setItem(LOCAL_UNLOCK_KEY, JSON.stringify(newUnlocked)); } catch {}
 
-    if (user) {
-      try {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ coins: newCoins, unlocked_games: newUnlocked })
-          .eq('user_id', user.id);
-
-        if (error) {
-          logError(error, 'update_coins');
-        }
-      } catch (err) {
-        logError(err, 'update_coins');
-      }
-    }
+    // Do not persist authoritative coin state from client. Server must be used for any updates.
   };
 
   const addCoins = async (amount: number) => {
@@ -105,23 +99,43 @@ export const CoinProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const deductCoins = async (amount: number) => {
     if (amount <= 0) return true;
+    // Use server-side deduct via unlock endpoint when used for unlocking games.
+    // For generic deduction, this client-side helper will optimistically update UI but should be replaced by server call.
     if (coins < amount) return false;
     const newCoins = Math.max(0, coins - amount);
     setCoins(newCoins);
-    await persist(newCoins, unlockedGames);
+    try { await persist(newCoins, unlockedGames); } catch {}
     return true;
   };
 
   const unlockGame = async (gameId: string, price: number) => {
     if (unlockedGames.includes(gameId)) return true;
     if (coins < price) return false;
-    const success = await deductCoins(price);
-    if (!success) return false;
-    const newUnlocked = [...unlockedGames, gameId];
-    setUnlockedGames(newUnlocked);
-    await persist(coins - price, newUnlocked);
-    toast.success('Game unlocked!');
-    return true;
+    // Call server unlock endpoint which validates and deducts atomically
+    try {
+      const session = await supabase.auth.getSession();
+      const token = (session as any)?.data?.session?.access_token;
+      const resp = await fetch('/api/unlock-game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ gameId, gameName: gameId, price }),
+      });
+      const json = await resp.json();
+      if (!json?.success) {
+        toast.error(json?.error || 'Failed to unlock');
+        return false;
+      }
+      // Update local state from server response
+      setCoins(json.remainingCoins ?? Math.max(0, coins - price));
+      const newUnlocked = [...unlockedGames, gameId];
+      setUnlockedGames(newUnlocked);
+      try { localStorage.setItem(LOCAL_UNLOCK_KEY, JSON.stringify(newUnlocked)); } catch {}
+      toast.success('Game unlocked!');
+      return true;
+    } catch (err) {
+      logError(err, 'unlock_game');
+      return false;
+    }
   };
 
   const isUnlocked = (gameId: string) => unlockedGames.includes(gameId);
