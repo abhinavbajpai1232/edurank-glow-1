@@ -1,7 +1,5 @@
-export default function HomePage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <h1 className="text-3xl font-bold">Welcome to BrainBuddy (Next.js migration)</h1>
-    </div>
-  );
+import Index from "@/pages/Index";
+
+export default function Page() {
+  return <Index />;
 }
